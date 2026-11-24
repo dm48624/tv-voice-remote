@@ -1,0 +1,47 @@
+name: Build app
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Test the command parser
+        run: gradle --no-daemon :app:testReleaseUnitTest
+
+      - name: Build the app
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Name the file
+        run: cp app/build/outputs/apk/release/app-release.apk tv-voice-remote.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tv-voice-remote
+          path: tv-voice-remote.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: TV Voice Remote 1.0.${{ github.run_number }}
+          body: Download tv-voice-remote.apk below on the tablet and open it to install or update.
+          files: tv-voice-remote.apk
+          make_latest: true
