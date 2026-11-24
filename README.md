@@ -16,7 +16,7 @@ Say things like:
 
 On the tablet, open this link in Chrome and install the file it downloads:
 
-**https://github.com/OWNER/tv-voice-remote/releases/latest/download/tv-voice-remote.apk**
+**https://github.com/dm48624/tv-voice-remote/releases/latest/download/tv-voice-remote.apk**
 
 Android will ask to allow installs from Chrome the first time. Newer versions install over the old one with the same link.
 
