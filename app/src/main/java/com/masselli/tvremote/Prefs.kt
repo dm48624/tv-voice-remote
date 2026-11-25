@@ -40,11 +40,19 @@ class Prefs(context: Context) {
     var channelsText: String
         get() = str("channels", DEFAULT_CHANNELS)
         set(v) { put("channels", v) }
+    var lastSearch: String
+        get() = str("lastSearch")
+        set(v) { put("lastSearch", v) }
+    /** Buttons that open Samsung's search screen from anywhere. */
+    var samsungSearchKeys: String
+        get() = str("samsungSearchKeys", DEFAULT_SEARCH_KEYS)
+        set(v) { put("samsungSearchKeys", v) }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }
 
     companion object {
+        const val DEFAULT_SEARCH_KEYS = "HOME, wait, LEFT*12, RIGHT*1, ENTER, wait"
         val DEFAULT_CHANNELS = """
             # One channel per line:   number = name, another name, another name
             # Use the number you'd press on the remote (9.1 for channel 9-1).

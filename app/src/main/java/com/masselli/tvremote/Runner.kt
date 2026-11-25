@@ -16,6 +16,8 @@ class Runner(private val prefs: Prefs) {
 
     fun handleText(text: String): String = run(parser().parse(text))
 
+    fun testSamsungSearch(): String = run(Command.Search("NCIS"))
+
     fun run(c: Command): String = try {
         exec(c)
     } catch (e: TvException) {
@@ -49,10 +51,10 @@ class Runner(private val prefs: Prefs) {
             Source.ROKU -> { switchToRoku(force = true); "Switched to the Roku." }
             Source.ANTENNA -> { ensureLiveTv(force = true); "Switched to live TV." }
         }
-        is Command.Search -> {
-            switchToRoku()
-            roku.search(c.query)
-            "Searching for ${c.query}."
+        is Command.Search -> if (c.onRoku) rokuSearch(c.query) else samsungSearch(c.query)
+        is Command.SearchRokuAgain -> {
+            val q = prefs.lastSearch
+            if (q.isEmpty()) "What should I look for? Say something like: find NCIS on the Roku." else rokuSearch(q)
         }
         is Command.Go -> go(c.target)
         is Command.Power -> power(c.on)
@@ -97,6 +99,21 @@ class Runner(private val prefs: Prefs) {
         Thread.sleep(1500)
     }
 
+    private fun samsungSearch(query: String): String {
+        prefs.lastSearch = query
+        tv.runRecipe(prefs.samsungSearchKeys)
+        tv.typeText(query)
+        prefs.mode = "tv"
+        return "Searching the Samsung for $query. If it's not there, say: try the Roku."
+    }
+
+    private fun rokuSearch(query: String): String {
+        prefs.lastSearch = query
+        switchToRoku()
+        roku.search(query)
+        return "Searching the Roku for $query."
+    }
+
     private fun go(target: String): String {
         val apps = try { roku.apps() } catch (e: TvException) { emptyList() }
         val t = Text.core(Text.normalize(target))
@@ -104,14 +121,10 @@ class Runner(private val prefs: Prefs) {
             val n = Text.core(Text.normalize(name))
             n.isNotEmpty() && (n == t || n.startsWith("$t ") || t.startsWith("$n ") || (t.length >= 3 && " $n ".contains(" $t ")))
         }.minByOrNull { it.second.length }
+        if (match == null) return samsungSearch(target)
         switchToRoku()
-        return if (match != null) {
-            roku.launch(match.first)
-            "Opening ${match.second}."
-        } else {
-            roku.search(target)
-            "Looking for $target."
-        }
+        roku.launch(match.first)
+        return "Opening ${match.second}."
     }
 
     private fun nav(c: Command.Key): String {

@@ -14,7 +14,9 @@ sealed class Command {
     data class Tune(val number: String, val name: String?) : Command()
     /** "Put on X" where X isn't a channel: open a Roku app named X, or search for X. */
     data class Go(val target: String) : Command()
-    data class Search(val query: String) : Command()
+    data class Search(val query: String, val onRoku: Boolean = false) : Command()
+    /** "Try the Roku": repeat the last search on the Roku. */
+    object SearchRokuAgain : Command()
     data class SwitchInput(val source: Source) : Command()
     data class Power(val on: Boolean) : Command()
     data class Listings(val question: String) : Command()
@@ -135,7 +137,8 @@ class CommandParser(private val channels: List<Channel>) {
                 "turn on subtitles", "turn off subtitles", "captions on", "captions off")
         )
 
-        private val FIND = Regex("^(find|search for|search|look for|look up|where can i watch|where can i find|where can i see|where is|i want to find|find me|search roku for)\\s+(.+)$")
+        private val FIND = Regex("^(search roku for|search the roku for|find|search for|search|look for|look up|where can i watch|where can i find|where can i see|where is|i want to find|find me)\\s+(.+)$")
+        private val ROKU_AGAIN = Regex("^(try|search|check|look on|search on|look at|use) (the )?roku( instead| too| now)?$|^(try|search) on (the )?roku$|^not there$|^try somewhere else$")
         private val GO = Regex("^(go to|put on|turn to|switch to|switch over to|change to|tune to|change the channel to|change channel to|go to channel|i want to watch|lets watch|let me watch|can we watch|watch|play|open up|open|launch|start|bring up|show me|show|turn on|switch on|channel|put it on|put)\\s+(.+)$")
     }
 
@@ -159,9 +162,12 @@ class CommandParser(private val channels: List<Channel>) {
         channelStep(s)?.let { return it }
         nav(s)?.let { return it }
 
+        if (ROKU_AGAIN.matches(s)) return Command.SearchRokuAgain
         FIND.matchEntire(s)?.let { m ->
-            val q = cleanTarget(m.groupValues[2])
-            return resolve(q) ?: Command.Search(q)
+            val raw2 = m.groupValues[2]
+            val onRoku = m.groupValues[1].startsWith("search") && m.groupValues[1].endsWith("roku for") || Regex("\\s+on (the )?roku$").containsMatchIn(raw2)
+            val q = cleanTarget(raw2)
+            return resolve(q) ?: Command.Search(q, onRoku)
         }
         GO.matchEntire(s)?.let { m ->
             val t = cleanTarget(m.groupValues[2])

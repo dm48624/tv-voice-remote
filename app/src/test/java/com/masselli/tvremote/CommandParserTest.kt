@@ -39,7 +39,10 @@ class CommandParserTest {
 
     @Test fun find() {
         assertEquals(Command.Search("ncis"), p.parse("find NCIS"))
-        assertEquals(Command.Search("ncis"), p.parse("Find NCIS on Roku"))
+        assertEquals(Command.Search("ncis", onRoku = true), p.parse("Find NCIS on Roku"))
+        assertEquals(Command.SearchRokuAgain, p.parse("try the Roku"))
+        assertEquals(Command.Search("ncis", onRoku = true), p.parse("search Roku for NCIS"))
+        assertEquals(Command.SearchRokuAgain, p.parse("search Roku instead"))
         assertEquals(Command.Search("price is right"), p.parse("search for the price is right"))
         assertEquals(Command.Go("paramount plus"), p.parse("open Paramount+"))
         assertEquals(Command.Go("paramount plus"), p.parse("put on paramount plus"))

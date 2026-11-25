@@ -29,6 +29,7 @@ class SettingsActivity : Activity() {
     private lateinit var rokuHdmi: EditText
     private lateinit var channels: EditText
     private lateinit var speak: CheckBox
+    private lateinit var searchKeys: EditText
     private lateinit var status: TextView
 
     private val navy = Color.parseColor("#1E3A5F")
@@ -56,6 +57,7 @@ class SettingsActivity : Activity() {
         prefs.rokuHdmi = rokuHdmi.text.toString()
         prefs.channelsText = channels.text.toString()
         prefs.speak = speak.isChecked
+        prefs.samsungSearchKeys = searchKeys.text.toString().ifBlank { Prefs.DEFAULT_SEARCH_KEYS }
     }
 
     private fun dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -111,6 +113,12 @@ class SettingsActivity : Activity() {
         root.addView(label("Which HDMI port is the Roku plugged into? (1, 2, 3 or 4)"))
         root.addView(label("Leave blank to let the Roku switch the TV itself (needs Anynet+ turned on in the TV's settings).", 15f, bold = false))
         rokuHdmi = field(prefs.rokuHdmi, "blank, or 1-4", numeric = true); root.addView(rokuHdmi)
+
+        root.addView(label("Buttons that open Samsung's search screen"))
+        root.addView(label("The app presses these to get to Search, then types what you asked for. Use remote button names separated by commas; *3 repeats a button 3 times; wait pauses a second. Example: HOME, wait, LEFT*12, RIGHT*1, ENTER", 15f, bold = false))
+        searchKeys = field(prefs.samsungSearchKeys, Prefs.DEFAULT_SEARCH_KEYS); root.addView(searchKeys)
+        root.addView(button("Test Samsung search (looks for NCIS)") { testSamsungSearch() })
+        root.addView(button("Reset search buttons to the default") { searchKeys.setText(Prefs.DEFAULT_SEARCH_KEYS) })
 
         speak = CheckBox(this).apply {
             text = "Speak replies out loud"
@@ -189,6 +197,15 @@ class SettingsActivity : Activity() {
             } catch (e: TvException) {
                 e.message ?: "Couldn't pair."
             }
+            ui.post { status.text = msg }
+        }
+    }
+
+    private fun testSamsungSearch() {
+        save()
+        status.text = "Watch the TV: it should go to Search and type NCIS…"
+        worker.execute {
+            val msg = Runner(prefs).testSamsungSearch()
             ui.post { status.text = msg }
         }
     }

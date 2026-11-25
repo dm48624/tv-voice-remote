@@ -108,6 +108,42 @@ class SamsungTv(private val prefs: Prefs) {
         }
     }
 
+    private fun sendRaw(msg: String) {
+        ensureConnected()
+        if (ws?.send(msg) != true) {
+            reset()
+            ensureConnected()
+            if (ws?.send(msg) != true) throw TvException("Lost the connection to the TV.")
+        }
+    }
+
+    /** Types text into whatever on-screen keyboard the TV is showing. */
+    fun typeText(text: String) {
+        val b64 = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        sendRaw(JSONObject().put("method", "ms.remote.control").put("params", JSONObject()
+            .put("Cmd", b64).put("DataOfCmd", "base64").put("TypeOfRemote", "SendInputString")).toString())
+        Thread.sleep(400)
+        sendRaw(JSONObject().put("method", "ms.remote.control").put("params", JSONObject()
+            .put("TypeOfRemote", "SendInputEnd")).toString())
+    }
+
+    /**
+     * Runs a button recipe like "HOME, wait, LEFT*12, RIGHT, ENTER".
+     * Names are remote buttons without the KEY_ prefix; "*n" repeats; "wait" pauses a second.
+     */
+    fun runRecipe(recipe: String) {
+        for (raw in recipe.split(',')) {
+            val part = raw.trim().uppercase()
+            if (part.isEmpty()) continue
+            if (part == "WAIT") { Thread.sleep(1200); continue }
+            val m = Regex("^([A-Z0-9_]+)\\s*(?:[*X]\\s*(\\d+))?$").matchEntire(part)
+                ?: throw TvException("I don't understand \"$raw\" in the Samsung search button list in Settings.")
+            val name = m.groupValues[1].removePrefix("KEY_")
+            val times = m.groupValues[2].toIntOrNull() ?: 1
+            repeat(times.coerceIn(1, 30)) { key("KEY_$name"); Thread.sleep(250) }
+        }
+    }
+
     fun keys(list: List<String>, gapMs: Long = 300) {
         for (k in list) {
             key(k)
