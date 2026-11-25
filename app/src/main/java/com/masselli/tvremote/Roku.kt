@@ -16,13 +16,13 @@ class Roku(private val prefs: Prefs) {
         return "http://$ip:8060"
     }
 
+    private val blockedMsg = "The Roku is blocking the app. With the Roku remote go to Settings, System, Advanced system settings, Control by mobile apps, and set Network access to Permissive."
+
     private fun post(path: String) {
         val req = Request.Builder().url(base() + path).post("".toRequestBody(null)).build()
         try {
             Net.http.newCall(req).execute().use { r ->
-                if (r.code == 403) throw TvException(
-                    "The Roku blocked the request. On the Roku go to Settings, System, Advanced system settings, Control by mobile apps, Network access, and choose Permissive."
-                )
+                if (r.code == 403) throw TvException(blockedMsg)
                 if (!r.isSuccessful) throw TvException("The Roku answered with error ${r.code}.")
             }
         } catch (e: IOException) {
@@ -32,6 +32,7 @@ class Roku(private val prefs: Prefs) {
 
     private fun get(path: String): String = try {
         Net.http.newCall(Request.Builder().url(base() + path).build()).execute().use { r ->
+            if (r.code == 403) throw TvException(blockedMsg)
             if (!r.isSuccessful) throw TvException("The Roku answered with error ${r.code}.")
             r.body?.string() ?: ""
         }
