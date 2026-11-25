@@ -1,9 +1,10 @@
 package com.masselli.tvremote
 
 /** Carries out commands on the TV and Roku. Call from a background thread. */
-class Runner(private val prefs: Prefs) {
+class Runner(private val prefs: Prefs, filesDir: java.io.File) {
     val tv = SamsungTv(prefs)
     val roku = Roku(prefs)
+    val listings = Listings(filesDir)
 
     fun parser() = CommandParser(CommandParser.parseChannels(prefs.channelsText))
 
@@ -16,7 +17,17 @@ class Runner(private val prefs: Prefs) {
 
     fun handleText(text: String): String = run(parser().parse(text))
 
-    fun testSamsungSearch(): String = run(Command.Search("NCIS"))
+    fun testSamsungSearch(): String = try { samsungSearch("NCIS") } catch (e: Exception) { e.message ?: "Something went wrong." }
+
+    fun listingsStatus(): String = try {
+        val chans = listings.channels(forceRefresh = true)
+        val nowSec = System.currentTimeMillis() / 1000
+        val sample = chans.filter { it.number.toInt() in 1100..1199 }.take(3)
+            .joinToString("; ") { c -> "${c.number} ${c.name}: ${c.airings.firstOrNull { it.startSec <= nowSec && nowSec < it.endSec }?.title ?: "?"}" }
+        "Samsung TV Plus listings: ${chans.size} channels, updated ${listings.ageText()}. Right now: $sample"
+    } catch (e: Exception) {
+        e.message ?: "Couldn't load the listings."
+    }
 
     fun run(c: Command): String = try {
         exec(c)
@@ -51,19 +62,89 @@ class Runner(private val prefs: Prefs) {
             Source.ROKU -> { switchToRoku(force = true); "Switched to the Roku." }
             Source.ANTENNA -> { ensureLiveTv(force = true); "Switched to live TV." }
         }
-        is Command.Search -> if (c.onRoku) rokuSearch(c.query) else samsungSearch(c.query)
+        is Command.Search -> if (c.onRoku) rokuSearch(c.query) else showSearch(c.query)
+        is Command.Confirm -> {
+            val ch = prefs.pendingChannel
+            if (ch.isEmpty()) "There's nothing waiting to put on." else {
+                prefs.pendingChannel = ""
+                tuneTo(ch)
+                "Putting on channel $ch."
+            }
+        }
         is Command.SearchRokuAgain -> {
             val q = prefs.lastSearch
             if (q.isEmpty()) "What should I look for? Say something like: find NCIS on the Roku." else rokuSearch(q)
         }
         is Command.Go -> go(c.target)
         is Command.Power -> power(c.on)
-        is Command.Listings -> {
+        is Command.Listings -> listingsAnswer(c.question)
+        is Command.Unknown -> "Sorry, I didn't understand \"${c.text}\"."
+    }
+
+    private fun tuneTo(number: String) {
+        ensureLiveTv()
+        typeChannel(number)
+    }
+
+    private fun spokenChannel(c: ListedChannel) = "${c.name}, channel ${c.number}"
+
+    /** "Find NCIS": look in the TV Plus listings first, then fall back to searching the Samsung's apps. */
+    private fun showSearch(query: String): String {
+        prefs.lastSearch = query
+        val hits = try { listings.search(query) } catch (e: TvException) {
+            return samsungSearch(query, "I couldn't get the TV listings, so I'm searching the Samsung's apps. ")
+        }
+        val nowSec = System.currentTimeMillis() / 1000
+        val onNow = hits.filter { it.onNow(nowSec) }.distinctBy { it.channel.number }
+        if (onNow.isNotEmpty()) {
+            val h = onNow.first()
+            val also = if (onNow.size > 1) " It's also on " + onNow.drop(1).take(2).joinToString(" and ") { "channel ${it.channel.number}" } + "." else ""
+            val what = "${h.airing.title} is on ${spokenChannel(h.channel)}, until ${Listings.timeText(h.airing.endSec)}."
+            return if (prefs.autoTune) {
+                tuneTo(h.channel.number)
+                "$what Putting it on.$also"
+            } else {
+                prefs.pendingChannel = h.channel.number
+                "$what Want me to put it on? Say yes.$also"
+            }
+        }
+        val next = hits.firstOrNull()
+        if (next != null) {
+            prefs.pendingChannel = next.channel.number
+            return "${next.airing.title} isn't on right now. It's next on ${spokenChannel(next.channel)} at ${Listings.timeText(next.airing.startSec)}. Say yes to go to that channel now."
+        }
+        return samsungSearch(query, "I don't see $query on Samsung TV Plus in the next few hours, and your antenna channels aren't in my listings, so I'm searching the Samsung's apps. ")
+    }
+
+    private val QUESTION_WORDS = setOf(
+        "is", "are", "there", "anything", "any", "something", "whats", "what", "on", "now", "right", "tonight",
+        "later", "playing", "good", "a", "an", "the", "listings", "schedule", "when", "time", "it", "today", "show", "shows"
+    )
+
+    private fun listingsAnswer(question: String): String {
+        val words = Text.normalize(question).split(' ').filter { it.isNotEmpty() }
+        val local = "local" in words
+        val topic = words.filter { it !in QUESTION_WORDS && it != "local" }.joinToString(" ")
+        if (local || topic.isEmpty()) {
             ensureLiveTv()
             tv.key("KEY_GUIDE")
-            "I can't look up TV listings yet, so I opened the TV guide for you."
+            return if (local) "Your antenna channels aren't in my listings yet, so I opened the TV guide for you."
+            else "Here's the TV guide."
         }
-        is Command.Unknown -> "Sorry, I didn't understand \"${c.text}\"."
+        val hits = try { listings.search(topic, alsoChannelNames = true) } catch (e: TvException) {
+            return e.message ?: "I couldn't get the listings."
+        }
+        val nowSec = System.currentTimeMillis() / 1000
+        val onNow = hits.filter { it.onNow(nowSec) }.distinctBy { it.channel.number }
+        if (onNow.isEmpty()) {
+            val next = hits.firstOrNull()
+                ?: return "I don't see any $topic on Samsung TV Plus in the next few hours. Your antenna channels aren't in my listings yet."
+            prefs.pendingChannel = next.channel.number
+            return "Nothing right now. ${next.airing.title} starts at ${Listings.timeText(next.airing.startSec)} on ${spokenChannel(next.channel)}. Say yes to go there."
+        }
+        prefs.pendingChannel = onNow.first().channel.number
+        val list = onNow.take(3).joinToString("; ") { "${it.airing.title} on ${it.channel.name}, ${it.channel.number}" }
+        return "Yes. $list. Say yes to put on the first one."
     }
 
     private fun typeChannel(number: String) {
@@ -99,12 +180,12 @@ class Runner(private val prefs: Prefs) {
         Thread.sleep(1500)
     }
 
-    private fun samsungSearch(query: String): String {
+    private fun samsungSearch(query: String, prefix: String = ""): String {
         prefs.lastSearch = query
         tv.runRecipe(prefs.samsungSearchKeys)
         tv.typeText(query)
         prefs.mode = "tv"
-        return "Searching the Samsung for $query. If it's not there, say: try the Roku."
+        return prefix + "Searching the Samsung for $query. If it's not there, say: try the Roku."
     }
 
     private fun rokuSearch(query: String): String {
@@ -115,13 +196,18 @@ class Runner(private val prefs: Prefs) {
     }
 
     private fun go(target: String): String {
+        listings.channelNamed(target)?.let { c ->
+            tuneTo(c.number)
+            val now = listings.nowOn(c)
+            return "Going to ${spokenChannel(c)}." + (now?.let { " ${it.title} is on." } ?: "")
+        }
         val apps = try { roku.apps() } catch (e: TvException) { emptyList() }
         val t = Text.core(Text.normalize(target))
         val match = apps.filter { (_, name) ->
             val n = Text.core(Text.normalize(name))
             n.isNotEmpty() && (n == t || n.startsWith("$t ") || t.startsWith("$n ") || (t.length >= 3 && " $n ".contains(" $t ")))
         }.minByOrNull { it.second.length }
-        if (match == null) return samsungSearch(target)
+        if (match == null) return showSearch(target)
         switchToRoku()
         roku.launch(match.first)
         return "Opening ${match.second}."

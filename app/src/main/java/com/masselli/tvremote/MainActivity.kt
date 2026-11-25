@@ -50,7 +50,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        runner = Runner(prefs)
+        runner = Runner(prefs, filesDir)
         tts = TextToSpeech(this, this)
         setContentView(buildUi())
 

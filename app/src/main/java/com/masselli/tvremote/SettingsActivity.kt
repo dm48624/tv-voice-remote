@@ -29,6 +29,7 @@ class SettingsActivity : Activity() {
     private lateinit var rokuHdmi: EditText
     private lateinit var channels: EditText
     private lateinit var speak: CheckBox
+    private lateinit var autoTune: CheckBox
     private lateinit var searchKeys: EditText
     private lateinit var status: TextView
 
@@ -57,6 +58,7 @@ class SettingsActivity : Activity() {
         prefs.rokuHdmi = rokuHdmi.text.toString()
         prefs.channelsText = channels.text.toString()
         prefs.speak = speak.isChecked
+        prefs.autoTune = autoTune.isChecked
         prefs.samsungSearchKeys = searchKeys.text.toString().ifBlank { Prefs.DEFAULT_SEARCH_KEYS }
     }
 
@@ -126,6 +128,13 @@ class SettingsActivity : Activity() {
             isChecked = prefs.speak
         }
         root.addView(speak)
+        autoTune = CheckBox(this).apply {
+            text = "When a show I ask for is on now, switch to it without asking"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            isChecked = prefs.autoTune
+        }
+        root.addView(autoTune)
+        root.addView(button("Check the Samsung TV Plus listings") { checkListings() })
 
         root.addView(label("Channels"))
         root.addView(label("One per line: the number, an equals sign, then the names you might say. For example:\n9.1 = 9&10, nine and ten, 9&10 News", 15f, bold = false))
@@ -201,11 +210,19 @@ class SettingsActivity : Activity() {
         }
     }
 
+    private fun checkListings() {
+        status.text = "Downloading the Samsung TV Plus listings…"
+        worker.execute {
+            val msg = Runner(prefs, filesDir).listingsStatus()
+            ui.post { status.text = msg }
+        }
+    }
+
     private fun testSamsungSearch() {
         save()
         status.text = "Watch the TV: it should go to Search and type NCIS…"
         worker.execute {
-            val msg = Runner(prefs).testSamsungSearch()
+            val msg = Runner(prefs, filesDir).testSamsungSearch()
             ui.post { status.text = msg }
         }
     }

@@ -47,6 +47,13 @@ class Prefs(context: Context) {
     var samsungSearchKeys: String
         get() = str("samsungSearchKeys", DEFAULT_SEARCH_KEYS)
         set(v) { put("samsungSearchKeys", v) }
+    /** Switch to a show automatically when it's on now (otherwise ask first). */
+    var autoTune: Boolean
+        get() = p.getBoolean("autoTune", true)
+        set(v) { p.edit().putBoolean("autoTune", v).apply() }
+    var pendingChannel: String
+        get() = str("pendingChannel")
+        set(v) { put("pendingChannel", v) }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }

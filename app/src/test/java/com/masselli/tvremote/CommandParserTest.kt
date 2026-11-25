@@ -75,5 +75,7 @@ class CommandParserTest {
         assertEquals(Command.SwitchInput(Source.ROKU), p.parse("switch to the Roku"))
         assertEquals(Command.SwitchInput(Source.ANTENNA), p.parse("go to live TV"))
         assertTrue(p.parse("blah blah") is Command.Unknown)
+        assertEquals(Command.Confirm, p.parse("Yes please"))
+        assertEquals(Command.Key(Nav.OK), p.parse("OK"))
     }
 }
