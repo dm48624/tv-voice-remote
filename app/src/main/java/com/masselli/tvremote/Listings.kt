@@ -10,7 +10,13 @@ import java.util.Locale
 import java.util.zip.GZIPInputStream
 
 data class Airing(val startSec: Long, val endSec: Long, val title: String)
-data class ListedChannel(val number: String, val name: String, val airings: List<Airing>)
+data class ListedChannel(
+    val number: String,
+    val name: String,
+    val airings: List<Airing>,
+    val antenna: Boolean = false,
+    val affiliate: String = ""
+)
 
 data class Hit(val channel: ListedChannel, val airing: Airing, val score: Int) {
     fun onNow(nowSec: Long) = airing.startSec <= nowSec && nowSec < airing.endSec
@@ -20,7 +26,8 @@ data class Hit(val channel: ListedChannel, val airing: Airing, val score: Int) {
  * Samsung TV Plus channel numbers and schedules (about the next 5 hours), from the free
  * listings file published at i.mjh.nz. Downloaded to the tablet and refreshed every few hours.
  */
-class Listings(private val dir: File) {
+class Listings(private val dir: File, prefs: Prefs) {
+    val antenna = SchedulesDirect(prefs, dir)
     companion object {
         private val URLS = listOf(
             "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SamsungTVPlus/.channels.json.gz",
@@ -42,8 +49,18 @@ class Listings(private val dir: File) {
     @Volatile private var cache: List<ListedChannel>? = null
     @Volatile private var cacheTime = 0L
 
-    @Synchronized
+    /** Antenna channels (if Schedules Direct is set up) plus Samsung TV Plus channels. */
     fun channels(forceRefresh: Boolean = false): List<ListedChannel> {
+        val ant = antenna.channels()
+        val plus = try { tvPlusChannels(forceRefresh) } catch (e: TvException) {
+            if (ant.isEmpty()) throw e
+            emptyList()
+        }
+        return ant + plus
+    }
+
+    @Synchronized
+    fun tvPlusChannels(forceRefresh: Boolean = false): List<ListedChannel> {
         val now = System.currentTimeMillis()
         if (!forceRefresh) cache?.let { if (now - cacheTime < MAX_AGE_MS) return it }
         if (forceRefresh || !file.exists() || now - file.lastModified() > MAX_AGE_MS) download()
@@ -104,13 +121,14 @@ class Listings(private val dir: File) {
     private fun words(s: String) = Text.normalize(s).split(' ').filter { it.isNotEmpty() && it !in SKIP_WORDS }
 
     /** Shows whose title matches, best first: on now, then soonest. */
-    fun search(query: String, alsoChannelNames: Boolean = false): List<Hit> {
+    fun search(query: String, alsoChannelNames: Boolean = false, antennaOnly: Boolean = false): List<Hit> {
         val nowSec = System.currentTimeMillis() / 1000
         val q = words(query)
         if (q.isEmpty()) return emptyList()
         val qs = q.joinToString(" ")
         val hits = ArrayList<Hit>()
         for (c in channels()) {
+            if (antennaOnly && !c.antenna) continue
             val nameWords = words(c.name)
             val nameHit = alsoChannelNames && q.all { it in nameWords }
             for (a in c.airings) {
@@ -127,7 +145,7 @@ class Listings(private val dir: File) {
             }
         }
         return hits.sortedWith(
-            compareByDescending<Hit> { it.onNow(nowSec) }.thenByDescending { it.score }.thenBy { it.airing.startSec }
+            compareByDescending<Hit> { it.onNow(nowSec) }.thenByDescending { it.score }.thenByDescending { it.channel.antenna }.thenBy { it.airing.startSec }
         )
     }
 

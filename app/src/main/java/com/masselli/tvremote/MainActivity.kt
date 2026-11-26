@@ -62,6 +62,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         }
+        worker.execute { runner.warmUp() }
         if (prefs.samsungIp.isEmpty() && prefs.rokuIp.isEmpty()) {
             replyView.text = "Welcome! Tap Settings (top right) to find your TV and Roku first."
         }

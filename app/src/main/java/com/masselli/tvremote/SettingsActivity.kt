@@ -30,6 +30,9 @@ class SettingsActivity : Activity() {
     private lateinit var channels: EditText
     private lateinit var speak: CheckBox
     private lateinit var autoTune: CheckBox
+    private lateinit var sdUser: EditText
+    private lateinit var sdPass: EditText
+    private lateinit var sdZip: EditText
     private lateinit var searchKeys: EditText
     private lateinit var status: TextView
 
@@ -59,6 +62,18 @@ class SettingsActivity : Activity() {
         prefs.channelsText = channels.text.toString()
         prefs.speak = speak.isChecked
         prefs.autoTune = autoTune.isChecked
+        val user = sdUser.text.toString().trim()
+        if (user != prefs.sdUser) { prefs.sdToken = ""; prefs.sdLineup = "" }
+        prefs.sdUser = user
+        val pass = sdPass.text.toString()
+        if (pass.isNotEmpty()) {
+            prefs.sdPasswordHash = SchedulesDirect.sha1(pass)
+            prefs.sdToken = ""
+            sdPass.setText("")
+            sdPass.hint = "saved (type again only to change it)"
+        }
+        if (sdZip.text.toString().trim() != prefs.sdZip) prefs.sdLineup = ""
+        prefs.sdZip = sdZip.text.toString()
         prefs.samsungSearchKeys = searchKeys.text.toString().ifBlank { Prefs.DEFAULT_SEARCH_KEYS }
     }
 
@@ -134,7 +149,19 @@ class SettingsActivity : Activity() {
             isChecked = prefs.autoTune
         }
         root.addView(autoTune)
-        root.addView(button("Check the Samsung TV Plus listings") { checkListings() })
+        root.addView(button("Check the TV listings") { checkListings() })
+
+        root.addView(label("Antenna listings (Schedules Direct)"))
+        root.addView(label("Sign up at schedulesdirect.org, then enter the same username and password here and tap Connect. Your password is stored only in scrambled form.", 15f, bold = false))
+        sdUser = field(prefs.sdUser, "Schedules Direct username"); root.addView(sdUser)
+        sdPass = field("", if (prefs.sdPasswordHash.isEmpty()) "Schedules Direct password" else "saved (type again only to change it)").apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        root.addView(sdPass)
+        root.addView(label("ZIP code for your antenna channels", 15f, bold = false))
+        sdZip = field(prefs.sdZip, "ZIP code", numeric = true); root.addView(sdZip)
+        root.addView(button("Connect to Schedules Direct and download listings") { connectSd() })
+        root.addView(button("Add my antenna channels to the Channels list below") { addAntennaChannels() })
 
         root.addView(label("Channels"))
         root.addView(label("One per line: the number, an equals sign, then the names you might say. For example:\n9.1 = 9&10, nine and ten, 9&10 News", 15f, bold = false))
@@ -208,6 +235,28 @@ class SettingsActivity : Activity() {
             }
             ui.post { status.text = msg }
         }
+    }
+
+    private fun connectSd() {
+        save()
+        status.text = "Connecting to Schedules Direct and downloading two days of listings… (this can take a minute)"
+        worker.execute {
+            val msg = Runner(prefs, filesDir).connectSchedulesDirect()
+            ui.post { status.text = msg }
+        }
+    }
+
+    private fun addAntennaChannels() {
+        save()
+        val lines = SchedulesDirect(prefs, filesDir).suggestedChannelLines(CommandParser.parseChannels(prefs.channelsText))
+        if (lines.isEmpty()) {
+            status.text = "Nothing to add. Connect to Schedules Direct first, or all your antenna channels are already in the list."
+            return
+        }
+        val text = channels.text.toString().trimEnd() + "\n# Antenna channels from Schedules Direct (add names you'd say after the commas)\n" + lines.joinToString("\n") + "\n"
+        channels.setText(text)
+        save()
+        status.text = "Added ${lines.size} antenna channels to the Channels list. You can add other names you might say after the commas."
     }
 
     private fun checkListings() {

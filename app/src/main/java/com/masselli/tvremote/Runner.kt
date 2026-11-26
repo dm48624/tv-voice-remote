@@ -4,7 +4,7 @@ package com.masselli.tvremote
 class Runner(private val prefs: Prefs, filesDir: java.io.File) {
     val tv = SamsungTv(prefs)
     val roku = Roku(prefs)
-    val listings = Listings(filesDir)
+    val listings = Listings(filesDir, prefs)
 
     fun parser() = CommandParser(CommandParser.parseChannels(prefs.channelsText))
 
@@ -19,12 +19,22 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
 
     fun testSamsungSearch(): String = try { samsungSearch("NCIS") } catch (e: Exception) { e.message ?: "Something went wrong." }
 
+    fun connectSchedulesDirect(): String = try {
+        listings.antenna.refresh()
+    } catch (e: TvException) {
+        e.message ?: "Couldn't connect to Schedules Direct."
+    }
+
     fun listingsStatus(): String = try {
-        val chans = listings.channels(forceRefresh = true)
+        val chans = listings.tvPlusChannels(forceRefresh = true)
         val nowSec = System.currentTimeMillis() / 1000
         val sample = chans.filter { it.number.toInt() in 1100..1199 }.take(3)
             .joinToString("; ") { c -> "${c.number} ${c.name}: ${c.airings.firstOrNull { it.startSec <= nowSec && nowSec < it.endSec }?.title ?: "?"}" }
-        "Samsung TV Plus listings: ${chans.size} channels, updated ${listings.ageText()}. Right now: $sample"
+        val ant = if (listings.antenna.configured) {
+            val a = listings.antenna.channels(allowDownload = false)
+            "Antenna listings: ${a.size} channels, updated ${listings.antenna.ageText()}. "
+        } else "Antenna listings: not set up. "
+        ant + "Samsung TV Plus listings: ${chans.size} channels, updated ${listings.ageText()}. Right now: $sample"
     } catch (e: Exception) {
         e.message ?: "Couldn't load the listings."
     }
@@ -86,7 +96,15 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         typeChannel(number)
     }
 
-    private fun spokenChannel(c: ListedChannel) = "${c.name}, channel ${c.number}"
+    private fun spokenChannel(c: ListedChannel): String {
+        val mine = CommandParser.parseChannels(prefs.channelsText).firstOrNull { it.number == c.number }?.names?.firstOrNull()
+        return "${mine ?: c.name}, channel ${c.number}"
+    }
+
+    /** Download listings in the background so the first question is quick. */
+    fun warmUp() {
+        try { listings.channels() } catch (_: Exception) {}
+    }
 
     /** "Find NCIS": look in the TV Plus listings first, then fall back to searching the Samsung's apps. */
     private fun showSearch(query: String): String {
@@ -113,7 +131,8 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             prefs.pendingChannel = next.channel.number
             return "${next.airing.title} isn't on right now. It's next on ${spokenChannel(next.channel)} at ${Listings.timeText(next.airing.startSec)}. Say yes to go to that channel now."
         }
-        return samsungSearch(query, "I don't see $query on Samsung TV Plus in the next few hours, and your antenna channels aren't in my listings, so I'm searching the Samsung's apps. ")
+        val where = if (listings.antenna.configured) "in the TV listings" else "on Samsung TV Plus in the next few hours, and your antenna channels aren't in my listings,"
+        return samsungSearch(query, "I don't see $query $where so I'm searching the Samsung's apps. ")
     }
 
     private val QUESTION_WORDS = setOf(
@@ -124,26 +143,28 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
     private fun listingsAnswer(question: String): String {
         val words = Text.normalize(question).split(' ').filter { it.isNotEmpty() }
         val local = "local" in words
-        val topic = words.filter { it !in QUESTION_WORDS && it != "local" }.joinToString(" ")
-        if (local || topic.isEmpty()) {
+        val haveAntenna = listings.antenna.configured
+        var topic = words.filter { it !in QUESTION_WORDS && it != "local" }.joinToString(" ")
+        if (local && topic.isEmpty()) topic = "news"
+        if ((local && !haveAntenna) || topic.isEmpty()) {
             ensureLiveTv()
             tv.key("KEY_GUIDE")
             return if (local) "Your antenna channels aren't in my listings yet, so I opened the TV guide for you."
             else "Here's the TV guide."
         }
-        val hits = try { listings.search(topic, alsoChannelNames = true) } catch (e: TvException) {
+        val hits = try { listings.search(topic, alsoChannelNames = !local, antennaOnly = local) } catch (e: TvException) {
             return e.message ?: "I couldn't get the listings."
         }
         val nowSec = System.currentTimeMillis() / 1000
         val onNow = hits.filter { it.onNow(nowSec) }.distinctBy { it.channel.number }
         if (onNow.isEmpty()) {
             val next = hits.firstOrNull()
-                ?: return "I don't see any $topic on Samsung TV Plus in the next few hours. Your antenna channels aren't in my listings yet."
+                ?: return "I don't see any ${if (local) "local " else ""}$topic in the listings for the next while." + if (haveAntenna) "" else " Your antenna channels aren't in my listings yet."
             prefs.pendingChannel = next.channel.number
             return "Nothing right now. ${next.airing.title} starts at ${Listings.timeText(next.airing.startSec)} on ${spokenChannel(next.channel)}. Say yes to go there."
         }
         prefs.pendingChannel = onNow.first().channel.number
-        val list = onNow.take(3).joinToString("; ") { "${it.airing.title} on ${it.channel.name}, ${it.channel.number}" }
+        val list = onNow.take(3).joinToString("; ") { "${it.airing.title} on ${spokenChannel(it.channel)}" }
         return "Yes. $list. Say yes to put on the first one."
     }
 

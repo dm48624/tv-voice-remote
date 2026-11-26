@@ -54,6 +54,25 @@ class Prefs(context: Context) {
     var pendingChannel: String
         get() = str("pendingChannel")
         set(v) { put("pendingChannel", v) }
+    var sdUser: String
+        get() = str("sdUser")
+        set(v) { put("sdUser", v.trim()) }
+    /** Only the SHA-1 of the password is kept, which is what Schedules Direct asks for. */
+    var sdPasswordHash: String
+        get() = str("sdPass")
+        set(v) { put("sdPass", v) }
+    var sdZip: String
+        get() = str("sdZip", "48624")
+        set(v) { put("sdZip", v.trim()) }
+    var sdLineup: String
+        get() = str("sdLineup")
+        set(v) { put("sdLineup", v) }
+    var sdToken: String
+        get() = str("sdToken")
+        set(v) { put("sdToken", v) }
+    var sdTokenExpires: Long
+        get() = p.getLong("sdTokenExpires", 0L)
+        set(v) { p.edit().putLong("sdTokenExpires", v).apply() }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }
