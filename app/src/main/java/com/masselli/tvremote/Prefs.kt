@@ -80,6 +80,10 @@ class Prefs(context: Context) {
     var sdLastError: String
         get() = str("sdLastError")
         set(v) { put("sdLastError", v) }
+    /** Only suggest antenna channels that appear in the user's Channels list. */
+    var onlyMyChannels: Boolean
+        get() = p.getBoolean("onlyMine", true)
+        set(v) { p.edit().putBoolean("onlyMine", v).apply() }
     /** Antenna channels the TV doesn't receive, e.g. "14.1, 27.1". */
     var hiddenChannels: String
         get() = str("hidden")

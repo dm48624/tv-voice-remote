@@ -57,7 +57,10 @@ class Listings(private val dir: File, private val prefs: Prefs) {
             emptyList()
         }
         val hidden = prefs.hiddenSet
-        return (ant + plus).filter { it.number !in hidden }
+        val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
+        // If the user has listed their antenna channels, stick to those.
+        val antKept = if (prefs.onlyMyChannels && ant.any { it.number in mine }) ant.filter { it.number in mine } else ant
+        return (antKept + plus).filter { it.number !in hidden }
     }
 
     @Synchronized
