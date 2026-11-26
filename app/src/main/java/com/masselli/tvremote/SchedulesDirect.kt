@@ -58,7 +58,8 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
         val stale = !cacheFile.exists() || System.currentTimeMillis() - cacheFile.lastModified() > REFRESH_MS
         // After any failure, don't keep retrying by ourselves: Schedules Direct locks accounts
         // (and can block them) for repeated failed requests. The Connect button retries on purpose.
-        if (stale && allowDownload && System.currentTimeMillis() >= prefs.sdHoldUntil) {
+        if (stale && allowDownload && System.currentTimeMillis() >= prefs.sdHoldUntil &&
+            !(prefs.sdLastError.contains("code 40") || prefs.sdLastError.contains("accept"))) {
             // Keep using the old copy if there is one, but remember what went wrong.
             try { refresh() } catch (e: Exception) {
                 prefs.sdLastError = (e as? TvException)?.message ?: "${e.javaClass.simpleName}: ${e.message}"
