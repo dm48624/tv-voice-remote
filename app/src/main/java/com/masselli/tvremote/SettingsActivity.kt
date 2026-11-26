@@ -214,6 +214,18 @@ class SettingsActivity : Activity() {
             setHorizontallyScrolling(false)
         }
         root.addView(channels)
+        val listCheck = label("", 15f, bold = false)
+        root.addView(button("Check my channel list") {
+            val parsed = CommandParser.parseChannels(channels.text.toString())
+            val skipped = channels.text.toString().lines().filter { l ->
+                val t = l.substringBefore('#').trim()
+                t.isNotEmpty() && CommandParser.parseChannelLine(l) == null
+            }
+            listCheck.text = "I read ${parsed.size} channels: " + parsed.joinToString(", ") { it.number } +
+                (if (skipped.isEmpty()) "" else "\nI couldn't read these lines: " + skipped.joinToString(" | "))
+            save()
+        })
+        root.addView(listCheck)
         root.addView(button("Reset channel list to the example") { channels.setText(Prefs.DEFAULT_CHANNELS) })
 
         root.addView(label("TV settings this app needs", 18f))

@@ -86,15 +86,20 @@ object Text {
 class CommandParser(private val channels: List<Channel>) {
 
     companion object {
-        fun parseChannels(text: String): List<Channel> = text.lines().mapNotNull { line ->
+        /**
+         * Reads the Channels list. Forgiving about how a line is typed:
+         * "9.3 = MeTV, Me TV", "9-3 MeTV", "9,3: MeTV", "Ch 9.3 - MeTV", or just "9.3".
+         */
+        fun parseChannels(text: String): List<Channel> = text.lines().mapNotNull { line -> parseChannelLine(line) }
+
+        fun parseChannelLine(line: String): Channel? {
             val l = line.substringBefore('#').trim()
-            if (l.isEmpty()) return@mapNotNull null
-            val parts = l.split("=", limit = 2)
-            if (parts.size < 2) return@mapNotNull null
-            val num = parts[0].trim().replace('-', '.')
-            if (!num.matches(Regex("\\d+(\\.\\d+)?"))) return@mapNotNull null
-            val names = parts[1].split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            Channel(num, names)
+                .replace(Regex("^(?:[^0-9A-Za-z]+|ch(?:annel)?\\.?\\s*)", RegexOption.IGNORE_CASE), "")
+            val m = Regex("^(\\d+)(?:\\s*[.,\\-\u2013\u2014]\\s*(\\d+))?(?![\\d])\\s*(.*)$").matchEntire(l) ?: return null
+            val num = if (m.groupValues[2].isNotEmpty()) "${m.groupValues[1]}.${m.groupValues[2]}" else m.groupValues[1]
+            val rest = m.groupValues[3].trim().trimStart('=', ':', '-', '\u2013', '\u2014').trim()
+            val names = rest.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            return Channel(num, names)
         }
 
         private val POLITE_START = Regex("^(please|can you|could you|would you|will you|hey|ok|okay|alright|all right|now|and|so|um|uh)\\s+")

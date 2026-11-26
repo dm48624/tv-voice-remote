@@ -23,6 +23,17 @@ class CommandParserTest {
         assertEquals("1001", channels[3].number)
     }
 
+    @Test fun forgivingChannelLines() {
+        assertEquals(Channel("9.3", listOf("MeTV")), CommandParser.parseChannelLine("9.3 = MeTV"))
+        assertEquals(Channel("9.3", listOf("MeTV")), CommandParser.parseChannelLine("9-3 MeTV"))
+        assertEquals(Channel("9.3", listOf("MeTV", "Me TV")), CommandParser.parseChannelLine("9,3: MeTV, Me TV"))
+        assertEquals(Channel("9.3", listOf("MeTV")), CommandParser.parseChannelLine("Ch 9.3 - MeTV"))
+        assertEquals(Channel("9.3", emptyList()), CommandParser.parseChannelLine("9.3"))
+        assertEquals(Channel("9.1", listOf("9&10", "nine and ten")), CommandParser.parseChannelLine("9.1 = 9&10, nine and ten"))
+        assertEquals(Channel("1001", listOf("News")), CommandParser.parseChannelLine("1001 = News"))
+        assertEquals(null, CommandParser.parseChannelLine("# a note"))
+    }
+
     @Test fun goToNineAndTen() {
         assertEquals("9.1", tune("go to TV9&10"))
         assertEquals("9.1", tune("Go to TV 9 & 10"))
