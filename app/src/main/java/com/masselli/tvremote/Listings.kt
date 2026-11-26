@@ -41,7 +41,8 @@ class Listings(private val dir: File, private val prefs: Prefs) {
             val t = SimpleDateFormat("h:mm a", Locale.US).format(d)
             val c = Calendar.getInstance().apply { time = d }
             val today = Calendar.getInstance()
-            return if (c.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)) t else "$t tomorrow"
+            val diff = c.get(Calendar.DAY_OF_YEAR) - today.get(Calendar.DAY_OF_YEAR)
+            return when (diff) { 0 -> t; 1 -> "$t tomorrow"; -1 -> "$t yesterday"; else -> SimpleDateFormat("EEE h:mm a", Locale.US).format(d) }
         }
     }
 

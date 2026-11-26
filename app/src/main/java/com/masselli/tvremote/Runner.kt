@@ -201,16 +201,22 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         val all = listings.channels(ignoreMyList = true)
         val ant = all.filter { it.antenna }
         val q = Text.normalize(query).split(' ').filter { it.isNotEmpty() && it != "the" }
-        val rows = ArrayList<String>()
+        val found = ArrayList<Pair<ListedChannel, Airing>>()
         for (c in all) for (a in c.airings) {
             if (a.endSec <= nowSec) continue
             val t = Text.normalize(a.title)
-            if (q.all { " $t ".contains(" $it ") }) {
-                val tag = when { c.number in prefs.hiddenSet -> " [skipped]"; c.number in mine -> " [in your list]"; else -> "" }
-                rows.add("${Listings.timeText(a.startSec)}  ch ${c.number} ${c.name}$tag: ${a.title}")
-            }
+            if (q.all { " $t ".contains(" $it ") }) found.add(c to a)
         }
-        val span = ant.flatMap { it.airings }.maxOfOrNull { it.endSec }?.let { "Antenna listings run until ${Listings.timeText(it)}." } ?: "No antenna listings loaded."
+        // Soonest first, so whatever is on now is at the top.
+        val rows = found.sortedBy { it.second.startSec }.map { (c, a) ->
+            val tag = when { c.number in prefs.hiddenSet -> " [skipped]"; c.number in mine -> " [in your list]"; else -> "" }
+            val time = if (a.startSec <= nowSec) "NOW (since ${Listings.timeText(a.startSec)})" else Listings.timeText(a.startSec)
+            "$time  ch ${c.number} ${c.name}$tag: ${a.title}"
+        }
+        val antAirings = ant.flatMap { it.airings }
+        val span = if (antAirings.isEmpty()) "No antenna listings loaded." else
+            "Antenna listings run from ${Listings.timeText(antAirings.minOf { it.startSec })} to ${Listings.timeText(antAirings.maxOf { it.endSec })} " +
+                "(${antAirings.count { it.startSec <= nowSec && nowSec < it.endSec }} shows on right now)."
         "Searched ${ant.size} antenna and ${all.size - ant.size} TV Plus channels. $span\n" +
             (if (rows.isEmpty()) "No matches for \"$query\"." else "${rows.size} matches:\n" + rows.take(15).joinToString("\n"))
     } catch (e: Exception) {
