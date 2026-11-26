@@ -73,6 +73,9 @@ class Prefs(context: Context) {
     var sdTokenExpires: Long
         get() = p.getLong("sdTokenExpires", 0L)
         set(v) { p.edit().putLong("sdTokenExpires", v).apply() }
+    var sdLastError: String
+        get() = str("sdLastError")
+        set(v) { put("sdLastError", v) }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }

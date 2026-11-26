@@ -57,7 +57,10 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
         if (!configured) return emptyList()
         val stale = !cacheFile.exists() || System.currentTimeMillis() - cacheFile.lastModified() > REFRESH_MS
         if (stale && allowDownload) {
-            try { refresh() } catch (_: TvException) { /* keep using the old copy if there is one */ }
+            // Keep using the old copy if there is one, but remember what went wrong.
+            try { refresh() } catch (e: Exception) {
+                prefs.sdLastError = (e as? TvException)?.message ?: "${e.javaClass.simpleName}: ${e.message}"
+            }
         }
         if (!cacheFile.exists()) return emptyList()
         if (cache == null || cacheMtime != cacheFile.lastModified()) {
@@ -145,7 +148,18 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
 
     /** Logs in, finds the antenna lineup, downloads two days of listings. Returns a summary. */
     @Synchronized
-    fun refresh(): String {
+    fun refresh(): String = try {
+        doRefresh()
+    } catch (e: TvException) {
+        prefs.sdLastError = e.message ?: "unknown error"
+        throw e
+    } catch (e: Exception) {
+        val msg = "Problem reading the Schedules Direct data (${e.javaClass.simpleName}: ${e.message})"
+        prefs.sdLastError = msg
+        throw TvException(msg)
+    }
+
+    private fun doRefresh(): String {
         if (!configured) throw TvException("Enter your Schedules Direct username and password in Settings first.")
         val tok = token()
         val lineupId = ensureLineup(tok)
@@ -226,6 +240,7 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
         tmp.renameTo(cacheFile)
         cache = null
         val shows = slots.count { titles.containsKey(it.programId) }
+        prefs.sdLastError = ""
         return "Connected to Schedules Direct. Got $shows listings for ${numbers.size} antenna channels in ZIP ${prefs.sdZip}."
     }
 

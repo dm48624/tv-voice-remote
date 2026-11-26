@@ -32,7 +32,9 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             .joinToString("; ") { c -> "${c.number} ${c.name}: ${c.airings.firstOrNull { it.startSec <= nowSec && nowSec < it.endSec }?.title ?: "?"}" }
         val ant = if (listings.antenna.configured) {
             val a = listings.antenna.channels(allowDownload = false)
-            "Antenna listings: ${a.size} channels, updated ${listings.antenna.ageText()}. "
+            val shows = a.sumOf { it.airings.size }
+            val err = prefs.sdLastError.takeIf { it.isNotEmpty() }?.let { "Last problem: $it. " } ?: ""
+            "Antenna listings: ${a.size} channels, $shows shows, updated ${listings.antenna.ageText()}. $err"
         } else "Antenna listings: not set up. "
         ant + "Samsung TV Plus listings: ${chans.size} channels, updated ${listings.ageText()}. Right now: $sample"
     } catch (e: Exception) {
@@ -131,7 +133,15 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             prefs.pendingChannel = next.channel.number
             return "${next.airing.title} isn't on right now. It's next on ${spokenChannel(next.channel)} at ${Listings.timeText(next.airing.startSec)}. Say yes to go to that channel now."
         }
-        val where = if (listings.antenna.configured) "in the TV listings" else "on Samsung TV Plus in the next few hours, and your antenna channels aren't in my listings,"
+        val all = try { listings.channels() } catch (e: TvException) { emptyList() }
+        val antCount = all.count { it.antenna }
+        val plusCount = all.size - antCount
+        val where = when {
+            !listings.antenna.configured -> "on Samsung TV Plus in the next few hours, and your antenna channels aren't in my listings,"
+            antCount == 0 -> "anywhere. The antenna listings didn't download" +
+                (prefs.sdLastError.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: "") + ","
+            else -> "in the listings for your $antCount antenna channels or $plusCount TV Plus channels,"
+        }
         return samsungSearch(query, "I don't see $query $where so I'm searching the Samsung's apps. ")
     }
 
