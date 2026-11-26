@@ -50,7 +50,7 @@ class Listings(private val dir: File, private val prefs: Prefs) {
     @Volatile private var cacheTime = 0L
 
     /** Antenna channels (if Schedules Direct is set up) plus Samsung TV Plus channels. */
-    fun channels(forceRefresh: Boolean = false): List<ListedChannel> {
+    fun channels(forceRefresh: Boolean = false, ignoreMyList: Boolean = false): List<ListedChannel> {
         val ant = antenna.channels()
         val plus = try { tvPlusChannels(forceRefresh) } catch (e: TvException) {
             if (ant.isEmpty()) throw e
@@ -59,7 +59,7 @@ class Listings(private val dir: File, private val prefs: Prefs) {
         val hidden = prefs.hiddenSet
         val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
         // If the user has listed their antenna channels, stick to those.
-        val antKept = if (prefs.onlyMyChannels && ant.any { it.number in mine }) ant.filter { it.number in mine } else ant
+        val antKept = if (!ignoreMyList && prefs.onlyMyChannels && ant.any { it.number in mine }) ant.filter { it.number in mine } else ant
         return (antKept + plus).filter { it.number !in hidden }
     }
 
@@ -125,14 +125,14 @@ class Listings(private val dir: File, private val prefs: Prefs) {
     private fun words(s: String) = Text.normalize(s).split(' ').filter { it.isNotEmpty() && it !in SKIP_WORDS }
 
     /** Shows whose title matches, best first: on now, then soonest. */
-    fun search(query: String, alsoChannelNames: Boolean = false, antennaOnly: Boolean = false): List<Hit> {
+    fun search(query: String, alsoChannelNames: Boolean = false, antennaOnly: Boolean = false, ignoreMyList: Boolean = false): List<Hit> {
         val nowSec = System.currentTimeMillis() / 1000
         val q = words(query)
         if (q.isEmpty()) return emptyList()
         val qs = q.joinToString(" ")
         val hits = ArrayList<Hit>()
         val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
-        for (c in channels()) {
+        for (c in channels(ignoreMyList = ignoreMyList)) {
             if (antennaOnly && !c.antenna) continue
             val nameWords = words(c.name)
             val nameHit = alsoChannelNames && q.all { it in nameWords }
@@ -149,7 +149,9 @@ class Listings(private val dir: File, private val prefs: Prefs) {
                 if (score > 0) hits.add(Hit(c, a, score, c.number in mine))
             }
         }
-        return hits.sortedWith(
+        // An exact title ("The Middle") beats a partial one ("Malcolm in the Middle").
+        val best = hits.maxOfOrNull { it.score } ?: return emptyList()
+        return hits.filter { it.score == best }.sortedWith(
             compareByDescending<Hit> { it.onNow(nowSec) }.thenByDescending { it.score }.thenByDescending { it.inMyList }.thenByDescending { it.channel.antenna }.thenBy { it.airing.startSec }
         )
     }

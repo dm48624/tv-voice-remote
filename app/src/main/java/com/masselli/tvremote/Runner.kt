@@ -144,6 +144,18 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             prefs.lastSuggested = next.channel.number
             return "${next.airing.title} isn't on right now. It's next on ${spokenChannel(next.channel)} at ${Listings.timeText(next.airing.startSec)}. Say yes to go to that channel now."
         }
+        // Not on any channel in the user's list: look at every antenna channel before giving up.
+        if (prefs.onlyMyChannels) {
+            val other = try { listings.search(query, ignoreMyList = true) } catch (e: TvException) { emptyList() }
+            val h = other.firstOrNull()
+            if (h != null) {
+                prefs.pendingChannel = h.channel.number
+                prefs.lastSuggested = h.channel.number
+                val time = if (h.onNow(nowSec)) "is on now" else "starts at ${Listings.timeText(h.airing.startSec)}"
+                return "${h.airing.title} $time on ${spokenChannel(h.channel)}, which isn't in your channel list. " +
+                    "Say yes to go there, or say: we don't get that channel."
+            }
+        }
         val all = try { listings.channels() } catch (e: TvException) { emptyList() }
         val antCount = all.count { it.antenna }
         val plusCount = all.size - antCount

@@ -178,8 +178,9 @@ class CommandParser(private val channels: List<Channel>) {
         FIND.matchEntire(s)?.let { m ->
             val raw2 = m.groupValues[2]
             val onRoku = m.groupValues[1].startsWith("search") && m.groupValues[1].endsWith("roku for") || Regex("\\s+on (the )?roku$").containsMatchIn(raw2)
-            val q = cleanTarget(raw2)
-            return resolve(q) ?: Command.Search(q, onRoku)
+            // Keep "the" in show titles ("The Middle"); only trim "on the Roku".
+            val q = raw2.replace(Regex("\\s+on (the )?(roku|tv|television)$"), "").trim()
+            return resolve(cleanTarget(q)) ?: Command.Search(q, onRoku)
         }
         GO.matchEntire(s)?.let { m ->
             val t = cleanTarget(m.groupValues[2])
