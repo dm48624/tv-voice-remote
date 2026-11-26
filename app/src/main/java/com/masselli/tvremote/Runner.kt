@@ -353,32 +353,47 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         val state = tv.status()
         if (on) {
             if (state == "on") return "The TV is on."
-            fun waitForOn(seconds: Int): Boolean {
-                repeat(seconds) {
+            // Keep sending the network wake-up signal while also trying the Power button
+            // (quick press, then held), never waiting long on a TV that isn't answering.
+            val methods = listOf<() -> Unit>({ tv.key("KEY_POWER") }, { tv.hold("KEY_POWER", 3000) })
+            val firstMethod = when {
+                prefs.powerOnMethod in methods.indices -> prefs.powerOnMethod
+                prefs.powerOffMethod == 2 -> 1
+                else -> 0
+            }
+            val order = listOf(firstMethod) + methods.indices.filter { it != firstMethod }
+            val tryAfterSec = listOf(2L, 9L)   // when to try each Power method
+            var nextMethod = 0
+            var lastTried = -1
+            var lastWake = 0L
+            tv.connectTimeoutSec = 4
+            val startMs = System.currentTimeMillis()
+            try {
+                while (System.currentTimeMillis() - startMs < 30_000) {
+                    val elapsedSec = (System.currentTimeMillis() - startMs) / 1000
+                    if (System.currentTimeMillis() - lastWake >= 3000) {
+                        try { tv.wake() } catch (_: TvException) {}
+                        lastWake = System.currentTimeMillis()
+                    }
+                    if (nextMethod < order.size && elapsedSec >= tryAfterSec[nextMethod]) {
+                        val idx = order[nextMethod]
+                        nextMethod++
+                        if (tv.status() == "standby") {
+                            tv.reset()
+                            try { methods[idx]() } catch (_: TvException) {}
+                            lastTried = idx
+                        }
+                    }
                     Thread.sleep(1000)
-                    if (tv.status() == "on") return true
+                    if (tv.status() == "on") {
+                        if (lastTried >= 0) prefs.powerOnMethod = lastTried
+                        return "The TV is on."
+                    }
                 }
-                return false
+            } finally {
+                tv.connectTimeoutSec = 35
+                tv.reset()
             }
-            // Always send the network wake-up signal first; it does no harm if the TV is in standby.
-            try { tv.wake() } catch (_: TvException) {}
-            if (state == "standby") {
-                // In standby the TV still answers on the network. Some TVs only wake on a held Power
-                // button (the same way they turn off), so try what worked before first.
-                val methods = listOf<() -> Unit>({ tv.key("KEY_POWER") }, { tv.hold("KEY_POWER", 3000) })
-                val first = when {
-                    prefs.powerOnMethod in methods.indices -> prefs.powerOnMethod
-                    prefs.powerOffMethod == 2 -> 1
-                    else -> 0
-                }
-                for (idx in listOf(first) + methods.indices.filter { it != first }) {
-                    if (tv.status() == "on") { tv.reset(); return "The TV is on." }
-                    tv.reset()
-                    try { methods[idx]() } catch (_: TvException) {}
-                    if (waitForOn(7)) { prefs.powerOnMethod = idx; tv.reset(); return "The TV is on." }
-                }
-            }
-            if (waitForOn(15)) { tv.reset(); return "The TV is on." }
             return "I sent the wake-up signal, but the TV didn't answer. Check that Power On with Mobile is turned on in the TV's settings."
         } else {
             if (state == null || state == "standby") return "The TV already looks like it's off."

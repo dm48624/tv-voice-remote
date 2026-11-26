@@ -169,7 +169,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             // Turning the TV on or off takes several seconds; ignore extra taps meanwhile.
             if (busyWithPower) { replyView.text = "Still working on the last TV On/Off… please wait a moment."; return }
             busyWithPower = true
-            replyView.text = if (c.on) "Turning the TV on… this takes about 10 seconds." else "Turning the TV off… this can take up to 15 seconds."
+            replyView.text = if (c.on) "Turning the TV on… this can take up to 30 seconds." else "Turning the TV off… this can take up to 15 seconds."
         } else {
             replyView.text = "…"
         }

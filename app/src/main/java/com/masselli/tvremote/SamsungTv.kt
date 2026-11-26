@@ -22,6 +22,8 @@ class SamsungTv(private val prefs: Prefs) {
     @Volatile private var connected = false
     @Volatile private var lastError: String? = null
     @Volatile private var connectedIp = ""
+    /** How long to wait for the TV to accept a connection. Kept short while waking it. */
+    @Volatile var connectTimeoutSec = 35L
 
     private fun ip(): String {
         val ip = prefs.samsungIp
@@ -36,7 +38,7 @@ class SamsungTv(private val prefs: Prefs) {
     }
 
     @Synchronized
-    fun ensureConnected(timeoutSec: Long = 35) {
+    fun ensureConnected(timeoutSec: Long = connectTimeoutSec) {
         val ip = ip()
         if (connected && ws != null && ip == connectedIp) return
         reset()
