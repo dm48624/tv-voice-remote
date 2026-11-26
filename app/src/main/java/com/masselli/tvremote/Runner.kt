@@ -365,10 +365,24 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             return "I sent the wake-up signal, but the TV didn't answer. Check that Power On with Mobile is turned on in the TV's settings."
         } else {
             if (state == null || state == "standby") return "The TV already looks like it's off."
-            tv.key("KEY_POWER")
-            tv.reset()
             prefs.mode = "tv"
-            return "Turning the TV off."
+            // Different Samsung models want different things; try each and check whether it worked.
+            val attempts = listOf<Pair<String, () -> Unit>>(
+                "Power button" to { tv.key("KEY_POWER") },
+                "power-off code" to { tv.key("KEY_POWEROFF") },
+                "held Power button" to { tv.hold("KEY_POWER", 3000) }
+            )
+            for ((name, action) in attempts) {
+                try { action() } catch (e: TvException) { /* connection drops when the TV turns off */ }
+                tv.reset()
+                for (i in 0 until 6) {
+                    Thread.sleep(1000)
+                    val st = tv.status()
+                    if (st == null || st == "standby") return "Turning the TV off."
+                }
+                android.util.Log.i("TvVoiceRemote", "Power off with $name didn't work")
+            }
+            return "I tried to turn the TV off three different ways, but it still reports that it's on. Tell Claude about this."
         }
     }
 }

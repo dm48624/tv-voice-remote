@@ -117,6 +117,15 @@ class SamsungTv(private val prefs: Prefs) {
         }
     }
 
+    /** Press and hold a button (some TVs only power off on a long press of Power). */
+    fun hold(k: String, ms: Long) {
+        fun send(cmd: String) = sendRaw(JSONObject().put("method", "ms.remote.control").put("params", JSONObject()
+            .put("Cmd", cmd).put("DataOfCmd", k).put("Option", "false").put("TypeOfRemote", "SendRemoteKey")).toString())
+        send("Press")
+        Thread.sleep(ms)
+        send("Release")
+    }
+
     /** Types text into whatever on-screen keyboard the TV is showing. */
     fun typeText(text: String) {
         val b64 = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
