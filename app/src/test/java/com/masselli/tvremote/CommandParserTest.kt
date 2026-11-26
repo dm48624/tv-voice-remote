@@ -76,6 +76,10 @@ class CommandParserTest {
         assertEquals(Command.SwitchInput(Source.ANTENNA), p.parse("go to live TV"))
         assertTrue(p.parse("blah blah") is Command.Unknown)
         assertEquals(Command.Confirm, p.parse("Yes please"))
+        assertEquals(Command.HideChannel(null), p.parse("I don't get that channel"))
+        assertEquals(Command.HideChannel("14.1"), p.parse("we don't get channel 14.1"))
+        assertEquals(Command.HideChannel("14.1"), p.parse("skip channel fourteen point one"))
+        assertEquals(Command.HideChannel(null), p.parse("that channel doesn't work"))
         assertEquals(Command.Key(Nav.OK), p.parse("OK"))
     }
 }

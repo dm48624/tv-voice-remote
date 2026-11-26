@@ -265,7 +265,7 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
 
     /** Channel-list lines ("9.1 = WWTV, CBS") for antenna channels the user's list doesn't have yet. */
     fun suggestedChannelLines(existing: List<Channel>): List<String> {
-        val have = existing.map { it.number }.toSet()
+        val have = existing.map { it.number }.toSet() + prefs.hiddenSet
         return channels(allowDownload = false)
             .filter { it.number !in have }
             .sortedWith(compareBy({ it.number.substringBefore('.').toIntOrNull() ?: 0 }, { it.number.substringAfter('.', "0").toIntOrNull() ?: 0 }))

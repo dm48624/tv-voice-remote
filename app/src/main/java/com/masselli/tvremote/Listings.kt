@@ -18,7 +18,7 @@ data class ListedChannel(
     val affiliate: String = ""
 )
 
-data class Hit(val channel: ListedChannel, val airing: Airing, val score: Int) {
+data class Hit(val channel: ListedChannel, val airing: Airing, val score: Int, val inMyList: Boolean = false) {
     fun onNow(nowSec: Long) = airing.startSec <= nowSec && nowSec < airing.endSec
 }
 
@@ -26,7 +26,7 @@ data class Hit(val channel: ListedChannel, val airing: Airing, val score: Int) {
  * Samsung TV Plus channel numbers and schedules (about the next 5 hours), from the free
  * listings file published at i.mjh.nz. Downloaded to the tablet and refreshed every few hours.
  */
-class Listings(private val dir: File, prefs: Prefs) {
+class Listings(private val dir: File, private val prefs: Prefs) {
     val antenna = SchedulesDirect(prefs, dir)
     companion object {
         private val URLS = listOf(
@@ -56,7 +56,8 @@ class Listings(private val dir: File, prefs: Prefs) {
             if (ant.isEmpty()) throw e
             emptyList()
         }
-        return ant + plus
+        val hidden = prefs.hiddenSet
+        return (ant + plus).filter { it.number !in hidden }
     }
 
     @Synchronized
@@ -127,6 +128,7 @@ class Listings(private val dir: File, prefs: Prefs) {
         if (q.isEmpty()) return emptyList()
         val qs = q.joinToString(" ")
         val hits = ArrayList<Hit>()
+        val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
         for (c in channels()) {
             if (antennaOnly && !c.antenna) continue
             val nameWords = words(c.name)
@@ -141,11 +143,11 @@ class Listings(private val dir: File, prefs: Prefs) {
                     else -> 0
                 }
                 if (score == 0 && nameHit && a.startSec <= nowSec) score = 1
-                if (score > 0) hits.add(Hit(c, a, score))
+                if (score > 0) hits.add(Hit(c, a, score, c.number in mine))
             }
         }
         return hits.sortedWith(
-            compareByDescending<Hit> { it.onNow(nowSec) }.thenByDescending { it.score }.thenByDescending { it.channel.antenna }.thenBy { it.airing.startSec }
+            compareByDescending<Hit> { it.onNow(nowSec) }.thenByDescending { it.score }.thenByDescending { it.inMyList }.thenByDescending { it.channel.antenna }.thenBy { it.airing.startSec }
         )
     }
 

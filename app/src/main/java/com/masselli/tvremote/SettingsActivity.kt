@@ -33,6 +33,7 @@ class SettingsActivity : Activity() {
     private lateinit var sdUser: EditText
     private lateinit var sdPass: EditText
     private lateinit var sdZip: EditText
+    private lateinit var hidden: EditText
     private lateinit var searchKeys: EditText
     private lateinit var status: TextView
 
@@ -74,6 +75,7 @@ class SettingsActivity : Activity() {
         }
         if (sdZip.text.toString().trim() != prefs.sdZip) prefs.sdLineup = ""
         prefs.sdZip = sdZip.text.toString()
+        prefs.hiddenChannels = hidden.text.toString()
         prefs.samsungSearchKeys = searchKeys.text.toString().ifBlank { Prefs.DEFAULT_SEARCH_KEYS }
     }
 
@@ -171,6 +173,9 @@ class SettingsActivity : Activity() {
         sdZip = field(prefs.sdZip, "ZIP code", numeric = true); root.addView(sdZip)
         root.addView(button("Connect to Schedules Direct and download listings") { connectSd() })
         root.addView(button("Add my antenna channels to the Channels list below") { addAntennaChannels() })
+        root.addView(label("Channels your TV doesn't get"))
+        root.addView(label("The app never suggests these. Separate with commas, e.g. 14.1, 27.1. You can also say: we don't get that channel.", 15f, bold = false))
+        hidden = field(prefs.hiddenChannels, "e.g. 14.1, 27.1"); root.addView(hidden)
 
         root.addView(label("Channels"))
         root.addView(label("One per line: the number, an equals sign, then the names you might say. For example:\n9.1 = 9&10, nine and ten, 9&10 News", 15f, bold = false))

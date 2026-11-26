@@ -19,6 +19,8 @@ sealed class Command {
     object SearchRokuAgain : Command()
     /** "Yes" after the app offers to put a show on. */
     object Confirm : Command()
+    /** "I don't get that channel": never suggest it again. number == null means the last one suggested. */
+    data class HideChannel(val number: String?) : Command()
     data class SwitchInput(val source: Source) : Command()
     data class Power(val on: Boolean) : Command()
     data class Listings(val question: String) : Command()
@@ -154,6 +156,13 @@ class CommandParser(private val channels: List<Channel>) {
         if (s.isBlank()) return Command.Unknown(raw)
 
         if (s.matches(Regex("^(yes|yeah|yep|yup|yes please|sure|go ahead|do it|please do|put it on|ok put it on|okay put it on|yes put it on|lets watch it|watch it)$"))) return Command.Confirm
+        Regex("^(?:i|we) (?:dont|do not|cant|cannot|can not) (?:get|receive|pick up|watch) (?:that|this|it|that one|that station|(?:that |the )?channel(?: (\\d+(?:\\.\\d+)?))?)(?: channel)?$").matchEntire(s)?.let {
+            return Command.HideChannel(it.groupValues[1].ifEmpty { null })
+        }
+        Regex("^(?:skip|hide|remove|forget|never use|dont use) (?:that|this|that one|(?:that |the )?channel(?: (\\d+(?:\\.\\d+)?))?)(?: channel)?$").matchEntire(s)?.let {
+            return Command.HideChannel(it.groupValues[1].ifEmpty { null })
+        }
+        if (s.matches(Regex("^(that|this) channel (doesnt|does not|wont|will not) (work|come in)$"))) return Command.HideChannel(null)
         if (POWER_OFF.any { it.matches(s) }) return Command.Power(false)
         if (POWER_ON.any { it.matches(s) }) return Command.Power(true)
 

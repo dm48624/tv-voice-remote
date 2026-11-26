@@ -80,6 +80,15 @@ class Prefs(context: Context) {
     var sdLastError: String
         get() = str("sdLastError")
         set(v) { put("sdLastError", v) }
+    /** Antenna channels the TV doesn't receive, e.g. "14.1, 27.1". */
+    var hiddenChannels: String
+        get() = str("hidden")
+        set(v) { put("hidden", v) }
+    val hiddenSet: Set<String>
+        get() = hiddenChannels.split(',', ' ', ';').map { it.trim().replace('-', '.') }.filter { it.isNotEmpty() }.toSet()
+    var lastSuggested: String
+        get() = str("lastSuggested")
+        set(v) { put("lastSuggested", v) }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }

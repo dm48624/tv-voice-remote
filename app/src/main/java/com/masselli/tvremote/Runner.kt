@@ -90,6 +90,15 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         is Command.Go -> go(c.target)
         is Command.Power -> power(c.on)
         is Command.Listings -> listingsAnswer(c.question)
+        is Command.HideChannel -> {
+            val n = c.number ?: prefs.lastSuggested
+            if (n.isEmpty()) "Which channel? Say something like: we don't get channel 14.1." else {
+                if (n !in prefs.hiddenSet) prefs.hiddenChannels = (prefs.hiddenSet + n).joinToString(", ")
+                prefs.lastSuggested = ""
+                val again = prefs.lastSearch
+                "OK, I won't use channel $n anymore. " + if (c.number == null && again.isNotEmpty()) showSearch(again) else ""
+            }
+        }
         is Command.Unknown -> "Sorry, I didn't understand \"${c.text}\"."
     }
 
@@ -120,9 +129,10 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             val h = onNow.first()
             val also = if (onNow.size > 1) " It's also on " + onNow.drop(1).take(2).joinToString(" and ") { "channel ${it.channel.number}" } + "." else ""
             val what = "${h.airing.title} is on ${spokenChannel(h.channel)}, until ${Listings.timeText(h.airing.endSec)}."
+            prefs.lastSuggested = h.channel.number
             return if (prefs.autoTune) {
                 tuneTo(h.channel.number)
-                "$what Putting it on.$also"
+                "$what Putting it on. If you don't get that channel, say: we don't get that channel.$also"
             } else {
                 prefs.pendingChannel = h.channel.number
                 "$what Want me to put it on? Say yes.$also"
@@ -131,6 +141,7 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         val next = hits.firstOrNull()
         if (next != null) {
             prefs.pendingChannel = next.channel.number
+            prefs.lastSuggested = next.channel.number
             return "${next.airing.title} isn't on right now. It's next on ${spokenChannel(next.channel)} at ${Listings.timeText(next.airing.startSec)}. Say yes to go to that channel now."
         }
         val all = try { listings.channels() } catch (e: TvException) { emptyList() }
@@ -171,9 +182,11 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             val next = hits.firstOrNull()
                 ?: return "I don't see any ${if (local) "local " else ""}$topic in the listings for the next while." + if (haveAntenna) "" else " Your antenna channels aren't in my listings yet."
             prefs.pendingChannel = next.channel.number
+            prefs.lastSuggested = next.channel.number
             return "Nothing right now. ${next.airing.title} starts at ${Listings.timeText(next.airing.startSec)} on ${spokenChannel(next.channel)}. Say yes to go there."
         }
         prefs.pendingChannel = onNow.first().channel.number
+        prefs.lastSuggested = onNow.first().channel.number
         val list = onNow.take(3).joinToString("; ") { "${it.airing.title} on ${spokenChannel(it.channel)}" }
         return "Yes. $list. Say yes to put on the first one."
     }
