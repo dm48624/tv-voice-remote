@@ -173,6 +173,50 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         "later", "playing", "good", "a", "an", "the", "listings", "schedule", "when", "time", "it", "today", "show", "shows"
     )
 
+    /** Now/next on one channel, if the topic names a channel. Null if it isn't a channel. */
+    private fun channelInfo(topic: String): String? {
+        val mine = CommandParser.parseChannels(prefs.channelsText)
+        val core = Text.core(topic)
+        val number = when {
+            core.matches(Regex("^\\d+(\\.\\d+)?$")) -> core
+            else -> CommandParser(mine).matchChannel(topic)?.number ?: return null
+        }
+        val all = try { listings.channels(ignoreMyList = true) } catch (e: TvException) { return e.message }
+        val c = all.firstOrNull { it.number == number }
+            ?: all.firstOrNull { !number.contains('.') && it.number == "$number.1" }
+            ?: return "I don't have any listings for channel $number. Schedules Direct may list that station under a different number, or not at all."
+        val nowSec = System.currentTimeMillis() / 1000
+        val upcoming = c.airings.filter { it.endSec > nowSec }.take(4)
+        if (upcoming.isEmpty()) return "I have channel ${c.number} (${c.name}) but no upcoming shows for it."
+        prefs.pendingChannel = c.number
+        return "On ${spokenChannel(c)}: " + upcoming.joinToString("; ") {
+            (if (it.startSec <= nowSec) "now, " else Listings.timeText(it.startSec) + ", ") + it.title
+        } + ". Say yes to go there."
+    }
+
+    /** For Settings: every listing that matches, with channel and time, to see what the listings hold. */
+    fun lookUp(query: String): String = try {
+        val nowSec = System.currentTimeMillis() / 1000
+        val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
+        val all = listings.channels(ignoreMyList = true)
+        val ant = all.filter { it.antenna }
+        val q = Text.normalize(query).split(' ').filter { it.isNotEmpty() && it != "the" }
+        val rows = ArrayList<String>()
+        for (c in all) for (a in c.airings) {
+            if (a.endSec <= nowSec) continue
+            val t = Text.normalize(a.title)
+            if (q.all { " $t ".contains(" $it ") }) {
+                val tag = when { c.number in prefs.hiddenSet -> " [skipped]"; c.number in mine -> " [in your list]"; else -> "" }
+                rows.add("${Listings.timeText(a.startSec)}  ch ${c.number} ${c.name}$tag: ${a.title}")
+            }
+        }
+        val span = ant.flatMap { it.airings }.maxOfOrNull { it.endSec }?.let { "Antenna listings run until ${Listings.timeText(it)}." } ?: "No antenna listings loaded."
+        "Searched ${ant.size} antenna and ${all.size - ant.size} TV Plus channels. $span\n" +
+            (if (rows.isEmpty()) "No matches for \"$query\"." else "${rows.size} matches:\n" + rows.take(15).joinToString("\n"))
+    } catch (e: Exception) {
+        e.message ?: "Lookup failed."
+    }
+
     private fun listingsAnswer(question: String): String {
         val words = Text.normalize(question).split(' ').filter { it.isNotEmpty() }
         val local = "local" in words
@@ -185,6 +229,8 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             return if (local) "Your antenna channels aren't in my listings yet, so I opened the TV guide for you."
             else "Here's the TV guide."
         }
+        // "What's on channel 9.2?" / "What's on 9&10?"
+        channelInfo(topic)?.let { return it }
         val hits = try { listings.search(topic, alsoChannelNames = !local, antennaOnly = local) } catch (e: TvException) {
             return e.message ?: "I couldn't get the listings."
         }

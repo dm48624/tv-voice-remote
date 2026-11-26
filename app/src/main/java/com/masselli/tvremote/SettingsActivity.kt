@@ -155,6 +155,23 @@ class SettingsActivity : Activity() {
         root.addView(autoTune)
         root.addView(button("Check the TV listings") { checkListings() })
 
+        root.addView(label("Look up a show in the listings", 16f))
+        val lookup = field("", "e.g. The Middle")
+        root.addView(lookup)
+        val lookupResult = label("", 15f, bold = false).apply { setTextIsSelectable(true) }
+        root.addView(button("Look it up") {
+            val q = lookup.text.toString().trim()
+            if (q.isNotEmpty()) {
+                save()
+                lookupResult.text = "Looking…"
+                worker.execute {
+                    val msg = Runner(prefs, filesDir).lookUp(q)
+                    ui.post { lookupResult.text = msg }
+                }
+            }
+        })
+        root.addView(lookupResult)
+
         root.addView(label("Antenna listings (Schedules Direct)"))
         root.addView(label("Sign up at schedulesdirect.org, then enter the same username and password here and tap Connect. Your password is stored only in scrambled form.", 15f, bold = false))
         sdUser = field(prefs.sdUser, "Schedules Direct username"); root.addView(sdUser)
