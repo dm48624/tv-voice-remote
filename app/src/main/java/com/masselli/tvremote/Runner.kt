@@ -352,18 +352,25 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
     private fun power(on: Boolean): String {
         val state = tv.status()
         if (on) {
-            when (state) {
-                "on" -> return "The TV is on."
-                "standby" -> { tv.reset(); tv.key("KEY_POWER"); return "Turning the TV on." }
+            if (state == "on") return "The TV is on."
+            fun waitForOn(seconds: Int): Boolean {
+                repeat(seconds) {
+                    Thread.sleep(1000)
+                    if (tv.status() == "on") return true
+                }
+                return false
             }
+            // In standby the TV still answers on the network, so the Power button can wake it.
+            if (state == "standby") {
+                tv.reset()
+                try { tv.key("KEY_POWER") } catch (_: TvException) {}
+                if (waitForOn(8)) { tv.reset(); return "The TV is on." }
+            }
+            // Fully asleep (or Power didn't work): send the network wake-up signal.
             tv.wake()
-            tv.reset()
-            repeat(20) {
-                Thread.sleep(1000)
-                if (tv.status() == "on") return "The TV is on."
-            }
+            if (waitForOn(20)) { tv.reset(); return "The TV is on." }
             return "I sent the wake-up signal, but the TV didn't answer. Check that Power On with Mobile is turned on in the TV's settings."
-        } else {
+        }        } else {
             if (state == null || state == "standby") return "The TV already looks like it's off."
             prefs.mode = "tv"
             // Different Samsung models want different things; try each and check whether it worked.
