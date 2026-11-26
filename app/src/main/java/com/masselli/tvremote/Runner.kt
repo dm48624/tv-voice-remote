@@ -370,7 +370,7 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
             tv.wake()
             if (waitForOn(20)) { tv.reset(); return "The TV is on." }
             return "I sent the wake-up signal, but the TV didn't answer. Check that Power On with Mobile is turned on in the TV's settings."
-        }        } else {
+        } else {
             if (state == null || state == "standby") return "The TV already looks like it's off."
             prefs.mode = "tv"
             // Different Samsung models want different things; try each and check whether it worked.
