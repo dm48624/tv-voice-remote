@@ -360,15 +360,25 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
                 }
                 return false
             }
-            // In standby the TV still answers on the network, so the Power button can wake it.
+            // Always send the network wake-up signal first; it does no harm if the TV is in standby.
+            try { tv.wake() } catch (_: TvException) {}
             if (state == "standby") {
-                tv.reset()
-                try { tv.key("KEY_POWER") } catch (_: TvException) {}
-                if (waitForOn(8)) { tv.reset(); return "The TV is on." }
+                // In standby the TV still answers on the network. Some TVs only wake on a held Power
+                // button (the same way they turn off), so try what worked before first.
+                val methods = listOf<() -> Unit>({ tv.key("KEY_POWER") }, { tv.hold("KEY_POWER", 3000) })
+                val first = when {
+                    prefs.powerOnMethod in methods.indices -> prefs.powerOnMethod
+                    prefs.powerOffMethod == 2 -> 1
+                    else -> 0
+                }
+                for (idx in listOf(first) + methods.indices.filter { it != first }) {
+                    if (tv.status() == "on") { tv.reset(); return "The TV is on." }
+                    tv.reset()
+                    try { methods[idx]() } catch (_: TvException) {}
+                    if (waitForOn(7)) { prefs.powerOnMethod = idx; tv.reset(); return "The TV is on." }
+                }
             }
-            // Fully asleep (or Power didn't work): send the network wake-up signal.
-            tv.wake()
-            if (waitForOn(20)) { tv.reset(); return "The TV is on." }
+            if (waitForOn(15)) { tv.reset(); return "The TV is on." }
             return "I sent the wake-up signal, but the TV didn't answer. Check that Power On with Mobile is turned on in the TV's settings."
         } else {
             if (state == null || state == "standby") return "The TV already looks like it's off."

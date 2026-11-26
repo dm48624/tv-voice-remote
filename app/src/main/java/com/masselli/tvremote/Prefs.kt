@@ -97,6 +97,10 @@ class Prefs(context: Context) {
     var powerOffMethod: Int
         get() = p.getInt("powerOffMethod", 0)
         set(v) { p.edit().putInt("powerOffMethod", v).apply() }
+    /** Which power-on method worked last time (0 tap, 1 hold). */
+    var powerOnMethod: Int
+        get() = p.getInt("powerOnMethod", -1)
+        set(v) { p.edit().putInt("powerOnMethod", v).apply() }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }
