@@ -158,6 +158,15 @@ class SettingsActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
         root.addView(sdPass)
+        root.addView(CheckBox(this).apply {
+            text = "Show the password while I type it"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setOnCheckedChangeListener { _, on ->
+                sdPass.inputType = InputType.TYPE_CLASS_TEXT or
+                    (if (on) InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD else InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                sdPass.setSelection(sdPass.text.length)
+            }
+        })
         root.addView(label("ZIP code for your antenna channels", 15f, bold = false))
         sdZip = field(prefs.sdZip, "ZIP code", numeric = true); root.addView(sdZip)
         root.addView(button("Connect to Schedules Direct and download listings") { connectSd() })

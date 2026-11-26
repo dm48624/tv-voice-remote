@@ -79,14 +79,9 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
             val code = o.optInt("code", 0)
             if (code != 0 && !o.has("map")) {
                 val msg = o.optString("message", "error $code")
-                throw TvException(
-                    when (code) {
-                        4001, 4003, 4004, 4005 -> "Schedules Direct didn't accept the username or password ($msg)."
-                        4006 -> "Your Schedules Direct trial or membership has ended."
-                        4009 -> "Schedules Direct says too many login attempts. Try again tomorrow."
-                        else -> "Schedules Direct said: $msg"
-                    }
-                )
+                // Show Schedules Direct's own words and code rather than guessing what they mean.
+                if (code in 4000..4999) prefs.sdToken = ""
+                throw TvException("Schedules Direct said: $msg (code $code)")
             }
         } else if (httpCode !in 200..299) {
             throw TvException("Schedules Direct answered with error $httpCode.")
