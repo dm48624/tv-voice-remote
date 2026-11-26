@@ -56,7 +56,9 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
     fun channels(allowDownload: Boolean = true): List<ListedChannel> {
         if (!configured) return emptyList()
         val stale = !cacheFile.exists() || System.currentTimeMillis() - cacheFile.lastModified() > REFRESH_MS
-        if (stale && allowDownload) {
+        // After any failure, don't keep retrying by ourselves: Schedules Direct locks accounts
+        // (and can block them) for repeated failed requests. The Connect button retries on purpose.
+        if (stale && allowDownload && System.currentTimeMillis() >= prefs.sdHoldUntil) {
             // Keep using the old copy if there is one, but remember what went wrong.
             try { refresh() } catch (e: Exception) {
                 prefs.sdLastError = (e as? TvException)?.message ?: "${e.javaClass.simpleName}: ${e.message}"
@@ -144,13 +146,19 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
     /** Logs in, finds the antenna lineup, downloads two days of listings. Returns a summary. */
     @Synchronized
     fun refresh(): String = try {
-        doRefresh()
+        val r = doRefresh()
+        prefs.sdHoldUntil = 0L
+        r
     } catch (e: TvException) {
         prefs.sdLastError = e.message ?: "unknown error"
+        // Login problems wait for you to fix them and tap Connect; other problems retry in an hour.
+        val loginProblem = (e.message ?: "").contains("code 40")
+        prefs.sdHoldUntil = System.currentTimeMillis() + if (loginProblem) 365L * 24 * 3600_000 else 3600_000L
         throw e
     } catch (e: Exception) {
         val msg = "Problem reading the Schedules Direct data (${e.javaClass.simpleName}: ${e.message})"
         prefs.sdLastError = msg
+        prefs.sdHoldUntil = System.currentTimeMillis() + 3600_000L
         throw TvException(msg)
     }
 

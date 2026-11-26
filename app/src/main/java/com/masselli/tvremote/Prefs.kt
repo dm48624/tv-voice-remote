@@ -73,6 +73,10 @@ class Prefs(context: Context) {
     var sdTokenExpires: Long
         get() = p.getLong("sdTokenExpires", 0L)
         set(v) { p.edit().putLong("sdTokenExpires", v).apply() }
+    /** No automatic Schedules Direct logins before this time (ms). Tapping Connect ignores it. */
+    var sdHoldUntil: Long
+        get() = p.getLong("sdHoldUntil", 0L)
+        set(v) { p.edit().putLong("sdHoldUntil", v).apply() }
     var sdLastError: String
         get() = str("sdLastError")
         set(v) { put("sdLastError", v) }
