@@ -93,6 +93,10 @@ class Prefs(context: Context) {
     var lastSuggested: String
         get() = str("lastSuggested")
         set(v) { put("lastSuggested", v) }
+    /** Which power-off method worked last time (0 tap, 1 POWEROFF, 2 hold), tried first next time. */
+    var powerOffMethod: Int
+        get() = p.getInt("powerOffMethod", 0)
+        set(v) { p.edit().putInt("powerOffMethod", v).apply() }
     var speak: Boolean
         get() = p.getBoolean("speak", true)
         set(v) { p.edit().putBoolean("speak", v).apply() }

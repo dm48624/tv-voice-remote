@@ -353,32 +353,39 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         val state = tv.status()
         if (on) {
             when (state) {
-                "on" -> return "The TV is already on."
+                "on" -> return "The TV is on."
                 "standby" -> { tv.reset(); tv.key("KEY_POWER"); return "Turning the TV on." }
             }
             tv.wake()
             tv.reset()
             repeat(20) {
                 Thread.sleep(1000)
-                if (tv.status() == "on") return "Turning the TV on."
+                if (tv.status() == "on") return "The TV is on."
             }
             return "I sent the wake-up signal, but the TV didn't answer. Check that Power On with Mobile is turned on in the TV's settings."
         } else {
             if (state == null || state == "standby") return "The TV already looks like it's off."
             prefs.mode = "tv"
             // Different Samsung models want different things; try each and check whether it worked.
-            val attempts = listOf<Pair<String, () -> Unit>>(
+            val all = listOf<Pair<String, () -> Unit>>(
                 "Power button" to { tv.key("KEY_POWER") },
                 "power-off code" to { tv.key("KEY_POWEROFF") },
                 "held Power button" to { tv.hold("KEY_POWER", 3000) }
             )
-            for ((name, action) in attempts) {
+            // Start with whichever method worked last time.
+            val first = prefs.powerOffMethod.coerceIn(0, all.size - 1)
+            val order = listOf(first) + all.indices.filter { it != first }
+            for (idx in order) {
+                val (name, action) = all[idx]
                 try { action() } catch (e: TvException) { /* connection drops when the TV turns off */ }
                 tv.reset()
                 for (i in 0 until 6) {
                     Thread.sleep(1000)
                     val st = tv.status()
-                    if (st == null || st == "standby") return "Turning the TV off."
+                    if (st == null || st == "standby") {
+                        prefs.powerOffMethod = idx
+                        return "The TV is off."
+                    }
                 }
                 android.util.Log.i("TvVoiceRemote", "Power off with $name didn't work")
             }

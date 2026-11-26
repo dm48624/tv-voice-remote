@@ -162,10 +162,19 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    @Volatile private var busyWithPower = false
+
     private fun runCommand(c: Command) {
-        replyView.text = "…"
+        if (c is Command.Power) {
+            // Turning the TV on or off takes several seconds; ignore extra taps meanwhile.
+            if (busyWithPower) { replyView.text = "Still working on it… please wait a moment."; return }
+            busyWithPower = true
+            replyView.text = if (c.on) "Turning the TV on… this takes about 10 seconds." else "Turning the TV off… this can take up to 15 seconds."
+        } else {
+            replyView.text = "…"
+        }
         worker.execute {
-            val reply = runner.run(c)
+            val reply = try { runner.run(c) } finally { if (c is Command.Power) busyWithPower = false }
             ui.post { showReply(reply, speak = false) }
         }
     }
