@@ -369,7 +369,9 @@ class SettingsActivity : Activity() {
                 val mine = CommandParser.parseChannels(prefs.channelsText)
                 val antennaNames = mine.filter { (it.number.toDoubleOrNull() ?: 0.0) < 1000 }
                     .flatMap { ch -> ch.names.map { it to ch.number } }
-                fun key(x: String) = Text.normalize(x).replace(" ", "")
+                // Forgiving comparison: ignore punctuation, spaces, and words like TV/Television/Network/Channel.
+                fun key(x: String) = Text.core(Text.normalize(x))
+                    .split(' ').filter { it !in setOf("television", "network", "affiliate") }.joinToString("")
                 val haveNumbers = mine.map { it.number }.toSet()
                 val plus = Listings(filesDir, prefs).tvPlusChannels()
                 val lines = ArrayList<String>()
@@ -380,13 +382,15 @@ class SettingsActivity : Activity() {
                     lines.add("${p.number} = TV Plus ${p.name}, Samsung ${p.name}")
                     report.add("${p.name}: ${match.second} on the antenna, ${p.number} on TV Plus")
                 }
-                if (lines.isEmpty()) "None of your antenna channel names match a Samsung TV Plus channel." else {
+                val compared = "\nNames I compared from your antenna channels: " +
+                    antennaNames.joinToString(", ") { "${it.second} \"${it.first}\"" }
+                if (lines.isEmpty()) "No new matches with Samsung TV Plus channels." + compared else {
                     ui.post {
                         channels.setText(channels.text.toString().trimEnd() +
                             "\n# Samsung TV Plus channels with the same name as an antenna channel\n" + lines.joinToString("\n") + "\n")
                         save()
                     }
-                    "Added ${lines.size}. Say \"TV Plus\" or \"Samsung\" before the name to get these.\n" + report.joinToString("\n")
+                    "Added ${lines.size}. Say \"TV Plus\" or \"Samsung\" before the name to get these.\n" + report.joinToString("\n") + compared
                 }
             } catch (e: Exception) {
                 e.message ?: "Couldn't load the Samsung TV Plus channels."
