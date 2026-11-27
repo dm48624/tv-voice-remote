@@ -193,6 +193,7 @@ class SettingsActivity : Activity() {
         root.addView(button("Connect to Schedules Direct and download listings") { connectSd() })
         root.addView(button("Choose antenna channels to add to my Channels list…") { addAntennaChannels() })
         root.addView(button("Fill in names for my channels") { fillInNames() })
+        root.addView(button("Put channels with the same name in my list") { addSameNamed() })
         root.addView(button("Remove the antenna channels that were added automatically") { removeAutoAdded() })
         onlyMine = CheckBox(this).apply {
             text = "Only suggest antenna channels that are in my Channels list"
@@ -354,6 +355,44 @@ class SettingsActivity : Activity() {
         save()
         status.text = if (changed == 0) "Your channels already have all the names Schedules Direct knows."
         else "Added names to $changed of your channels. Your own names were kept, and they come first."
+    }
+
+    /**
+     * Finds Samsung TV Plus channels named the same as one of the user's antenna channels (e.g. ION)
+     * and adds them under their own names ("1510 = TV Plus ION, Samsung ION") so both can be asked for.
+     */
+    private fun addSameNamed() {
+        save()
+        status.text = "Comparing your antenna channels with Samsung TV Plus…"
+        worker.execute {
+            val msg = try {
+                val mine = CommandParser.parseChannels(prefs.channelsText)
+                val antennaNames = mine.filter { (it.number.toDoubleOrNull() ?: 0.0) < 1000 }
+                    .flatMap { ch -> ch.names.map { it to ch.number } }
+                fun key(x: String) = Text.normalize(x).replace(" ", "")
+                val haveNumbers = mine.map { it.number }.toSet()
+                val plus = Listings(filesDir, prefs).tvPlusChannels()
+                val lines = ArrayList<String>()
+                val report = ArrayList<String>()
+                for (p in plus) {
+                    if (p.number in haveNumbers) continue
+                    val match = antennaNames.firstOrNull { (n, _) -> key(n).length >= 2 && key(n) == key(p.name) } ?: continue
+                    lines.add("${p.number} = TV Plus ${p.name}, Samsung ${p.name}")
+                    report.add("${p.name}: ${match.second} on the antenna, ${p.number} on TV Plus")
+                }
+                if (lines.isEmpty()) "None of your antenna channel names match a Samsung TV Plus channel." else {
+                    ui.post {
+                        channels.setText(channels.text.toString().trimEnd() +
+                            "\n# Samsung TV Plus channels with the same name as an antenna channel\n" + lines.joinToString("\n") + "\n")
+                        save()
+                    }
+                    "Added ${lines.size}. Say \"TV Plus\" or \"Samsung\" before the name to get these.\n" + report.joinToString("\n")
+                }
+            } catch (e: Exception) {
+                e.message ?: "Couldn't load the Samsung TV Plus channels."
+            }
+            ui.post { status.text = msg }
+        }
     }
 
     /** Removes lines that "Add my antenna channels" put in automatically, keeping ones the user typed or edited. */
