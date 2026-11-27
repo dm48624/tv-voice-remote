@@ -157,13 +157,23 @@ class Listings(private val dir: File, private val prefs: Prefs) {
         )
     }
 
-    /** A TV Plus channel whose name is exactly what was said ("CBS News 24/7"). */
+    /**
+     * A channel whose name (or network, like ION) is what was said: "Danger TV", "ION", "CBS News 24/7".
+     * Prefers channels in the user's list, then antenna channels, then Samsung TV Plus.
+     */
     fun channelNamed(target: String): ListedChannel? {
-        val t = words(target).joinToString(" ")
-        if (t.length < 3) return null
+        val t = Text.core(Text.normalize(target))
+        if (t.length < 2) return null
         val all = try { channels() } catch (e: TvException) { return null }
-        return all.firstOrNull { words(it.name).joinToString(" ") == t }
-            ?: all.firstOrNull { val n = words(it.name).joinToString(" "); t.length >= 5 && n.startsWith("$t ") }
+        val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
+        fun names(c: ListedChannel) = listOf(c.name, c.affiliate.replace(Regex("(?i)\\s*affiliate$"), ""))
+            .map { Text.core(Text.normalize(it)) }.filter { it.isNotEmpty() }
+        fun rank(c: ListedChannel) = (if (c.number in mine) 2 else 0) + (if (c.antenna) 1 else 0)
+        val exact = all.filter { c -> names(c).any { it == t } }
+        if (exact.isNotEmpty()) return exact.maxByOrNull { rank(it) }
+        if (t.length < 4) return null
+        val starts = all.filter { c -> names(c).any { it.startsWith("$t ") } }
+        return starts.maxByOrNull { rank(it) }
     }
 
     fun nowOn(c: ListedChannel): Airing? {

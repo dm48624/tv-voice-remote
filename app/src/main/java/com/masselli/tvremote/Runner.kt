@@ -138,6 +138,13 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
                 "$what Want me to put it on? Say yes.$also"
             }
         }
+        // Not a show on right now; maybe it's a channel name: "Find Danger TV" / "Find ION". / "Find ION": a channel name, not a show.
+        listings.channelNamed(query)?.let { c ->
+            tuneTo(c.number)
+            prefs.lastSuggested = c.number
+            val now = listings.nowOn(c)
+            return "Going to ${spokenChannel(c)}." + (now?.let { " ${it.title} is on." } ?: "")
+        }
         val next = hits.firstOrNull()
         if (next != null) {
             prefs.pendingChannel = next.channel.number
@@ -179,7 +186,9 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         val core = Text.core(topic)
         val number = when {
             core.matches(Regex("^\\d+(\\.\\d+)?$")) -> core
-            else -> CommandParser(mine).matchChannel(topic)?.number ?: return null
+            else -> CommandParser(mine).matchChannel(topic)?.number
+                ?: listings.channelNamed(topic)?.number
+                ?: return null
         }
         val all = try { listings.channels(ignoreMyList = true) } catch (e: TvException) { return e.message }
         val c = all.firstOrNull { it.number == number }
