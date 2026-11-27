@@ -63,7 +63,22 @@ class Listings(private val dir: File, private val prefs: Prefs) {
         val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
         // If the user has listed their antenna channels, stick to those.
         val antKept = if (!ignoreMyList && prefs.onlyMyChannels && ant.any { it.number in mine }) ant.filter { it.number in mine } else ant
-        return (antKept + plus).filter { it.number !in hidden }
+        return (antKept + renumber(plus, mine = CommandParser.parseChannels(prefs.channelsText))).filter { it.number !in hidden }
+    }
+
+    /**
+     * Samsung sometimes renumbers TV Plus channels before the free listings catch up.
+     * A line in the user's list like "2012 = Tiny House Nation" moves that channel to 2012.
+     */
+    private fun renumber(plus: List<ListedChannel>, mine: List<Channel>): List<ListedChannel> {
+        val fixes = mine.filter { (it.number.toIntOrNull() ?: 0) >= 1000 }
+        if (fixes.isEmpty()) return plus
+        fun key(x: String) = Text.core(Text.normalize(x)).replace(" ", "")
+        return plus.map { c ->
+            val name = key(c.name)
+            val fix = fixes.firstOrNull { f -> f.names.any { n -> val k = key(n); k.length >= 4 && (name == k || name.startsWith(k)) } }
+            if (fix != null && fix.number != c.number) c.copy(number = fix.number) else c
+        }
     }
 
     @Synchronized
