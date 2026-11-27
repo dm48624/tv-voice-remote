@@ -15,7 +15,9 @@ data class ListedChannel(
     val name: String,
     val airings: List<Airing>,
     val antenna: Boolean = false,
-    val affiliate: String = ""
+    val affiliate: String = "",
+    /** Schedules Direct's longer station name, which sometimes names the network (e.g. "Cozi TV"). */
+    val altName: String = ""
 )
 
 data class Hit(val channel: ListedChannel, val airing: Airing, val score: Int, val inMyList: Boolean = false) {
@@ -166,10 +168,14 @@ class Listings(private val dir: File, private val prefs: Prefs) {
         if (t.length < 2) return null
         val all = try { channels() } catch (e: TvException) { return null }
         val mine = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
-        fun names(c: ListedChannel) = listOf(c.name, c.affiliate.replace(Regex("(?i)\\s*affiliate$"), ""))
-            .map { Text.core(Text.normalize(it)) }.filter { it.isNotEmpty() }
+        fun rawNames(c: ListedChannel) = listOf(c.name, c.altName, c.affiliate.replace(Regex("(?i)\\s*affiliate$"), ""))
+            .filter { it.isNotBlank() }
+        fun names(c: ListedChannel) = rawNames(c).map { Text.core(Text.normalize(it)) }.filter { it.isNotEmpty() }
+        // "DangerTV" vs "Danger TV": also compare with spaces (and a trailing "tv") squeezed out.
+        fun squash(x: String) = Text.normalize(x).replace(" ", "").removeSuffix("tv").removeSuffix("channel")
+        val tSquash = squash(target)
         fun rank(c: ListedChannel) = (if (c.number in mine) 2 else 0) + (if (c.antenna) 1 else 0)
-        val exact = all.filter { c -> names(c).any { it == t } }
+        val exact = all.filter { c -> names(c).any { it == t } || (tSquash.length >= 3 && rawNames(c).any { squash(it) == tSquash }) }
         if (exact.isNotEmpty()) return exact.maxByOrNull { rank(it) }
         if (t.length < 4) return null
         val starts = all.filter { c -> names(c).any { it.startsWith("$t ") } }

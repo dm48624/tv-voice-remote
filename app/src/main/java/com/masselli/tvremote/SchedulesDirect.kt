@@ -170,11 +170,13 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
 
         val lineup = JSONObject(call("GET", "/lineups/$lineupId", token = tok))
         val stationInfo = HashMap<String, Pair<String, String>>() // id -> (callsign, affiliate)
+        val stationFull = HashMap<String, String>() // id -> longer station name
         val stations = lineup.optJSONArray("stations") ?: JSONArray()
         for (i in 0 until stations.length()) {
             val s = stations.getJSONObject(i)
             val name = s.optString("callsign").ifEmpty { s.optString("name") }
             stationInfo[s.getString("stationID")] = name to s.optString("affiliate")
+            stationFull[s.getString("stationID")] = s.optString("name")
         }
         val numbers = LinkedHashMap<String, String>() // stationID -> "9.1"
         val map = lineup.optJSONArray("map") ?: JSONArray()
@@ -237,7 +239,8 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
             slots.filter { it.station == id }.sortedBy { it.start }.forEach { s ->
                 titles[s.programId]?.let { a.put(JSONArray().put(s.start).put(s.end).put(it)) }
             }
-            out.put(JSONObject().put("n", num).put("name", info.first).put("aff", info.second).put("a", a))
+            out.put(JSONObject().put("n", num).put("name", info.first).put("aff", info.second)
+                .put("full", stationFull[id].orEmpty()).put("a", a))
         }
         val tmp = File(dir, "antenna-listings.tmp")
         tmp.writeText(out.toString())
@@ -257,7 +260,8 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
                 val x = a.getJSONArray(j)
                 Airing(x.getLong(0), x.getLong(1), x.getString(2))
             }
-            ListedChannel(o.getString("n"), o.getString("name"), airings, antenna = true, affiliate = o.optString("aff"))
+            ListedChannel(o.getString("n"), o.getString("name"), airings, antenna = true,
+                affiliate = o.optString("aff"), altName = o.optString("full").takeIf { it != o.getString("name") }.orEmpty())
         }
     } catch (e: Exception) {
         emptyList()
@@ -270,8 +274,9 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
             .filter { it.number !in have }
             .sortedWith(compareBy({ it.number.substringBefore('.').toIntOrNull() ?: 0 }, { it.number.substringAfter('.', "0").toIntOrNull() ?: 0 }))
             .map { c ->
-                val aff = c.affiliate.removeSuffix(" Affiliate").trim()
-                if (aff.isNotEmpty() && !aff.equals(c.name, true)) "${c.number} = ${c.name}, $aff" else "${c.number} = ${c.name}"
+                val names = listOf(c.name, c.altName, c.affiliate.removeSuffix(" Affiliate").trim())
+                    .filter { it.isNotBlank() }.distinctBy { it.lowercase() }
+                "${c.number} = " + names.joinToString(", ")
             }
     }
 }
