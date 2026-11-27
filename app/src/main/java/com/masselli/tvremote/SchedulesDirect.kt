@@ -268,8 +268,27 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
     }
 
     /** Names Schedules Direct gives a channel (call letters, network, longer name). */
-    fun namesFor(c: ListedChannel): List<String> =
-        listOf(c.name, c.altName, c.affiliate, c.affiliate.removeSuffix(" Affiliate").trim()).filter { it.isNotBlank() }
+    fun namesFor(c: ListedChannel): List<String> {
+        val base = listOf(c.name, c.altName, c.affiliate, c.affiliate.removeSuffix(" Affiliate").trim()).filter { it.isNotBlank() }
+        return (base + base.flatMap { shortNames(it) }).distinctBy { it.lowercase() }
+    }
+
+    /** The short names people say for networks Schedules Direct spells out in full. */
+    private fun shortNames(full: String): List<String> {
+        val out = ArrayList<String>()
+        // "ION: Independent Television" -> "ION"
+        full.substringBefore(':', "").trim().takeIf { it.isNotEmpty() && it.length <= 12 }?.let { out.add(it) }
+        val f = full.lowercase()
+        val known = listOf(
+            "american broadcasting" to "ABC", "columbia broadcasting" to "CBS", "national broadcasting" to "NBC",
+            "fox" to "Fox", "public broadcasting" to "PBS", "cw television" to "CW", "me tv" to "MeTV",
+            "metv" to "MeTV", "ion" to "ION", "court tv" to "Court TV", "home shopping" to "HSN"
+        )
+        for ((needle, short) in known) {
+            if (Regex("\\b" + Regex.escape(needle) + "\\b").containsMatchIn(f) && !full.equals(short, true)) out.add(short)
+        }
+        return out
+    }
 
     fun allChannels(): List<ListedChannel> = channels(allowDownload = false)
         .sortedWith(compareBy({ it.number.substringBefore('.').toIntOrNull() ?: 0 }, { it.number.substringAfter('.', "0").toIntOrNull() ?: 0 }))

@@ -370,8 +370,13 @@ class SettingsActivity : Activity() {
                 val antennaNames = mine.filter { (it.number.toDoubleOrNull() ?: 0.0) < 1000 }
                     .flatMap { ch -> ch.names.map { it to ch.number } }
                 // Forgiving comparison: ignore punctuation, spaces, and words like TV/Television/Network/Channel.
-                fun key(x: String) = Text.core(Text.normalize(x))
-                    .split(' ').filter { it !in setOf("television", "network", "affiliate") }.joinToString("")
+                // Forgiving comparison: only the part before a colon ("ION: Independent Television" -> "ION"),
+                // no spaces or punctuation, and no trailing Network/Television/TV/Channel ("Me TV Network" = "MeTV").
+                fun key(x: String): String {
+                    var k = Text.normalize(x.substringBefore(':')).replace(" ", "")
+                    for (suffix in listOf("network", "television", "affiliate", "channel", "tv")) k = k.removeSuffix(suffix)
+                    return k.removePrefix("the")
+                }
                 val haveNumbers = mine.map { it.number }.toSet()
                 val plus = Listings(filesDir, prefs).tvPlusChannels()
                 val lines = ArrayList<String>()
