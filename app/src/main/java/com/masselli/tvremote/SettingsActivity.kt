@@ -191,7 +191,8 @@ class SettingsActivity : Activity() {
         root.addView(label("ZIP code for your antenna channels", 15f, bold = false))
         sdZip = field(prefs.sdZip, "ZIP code", numeric = true); root.addView(sdZip)
         root.addView(button("Connect to Schedules Direct and download listings") { connectSd() })
-        root.addView(button("Add my antenna channels to the Channels list below") { addAntennaChannels() })
+        root.addView(button("Choose antenna channels to add to my Channels list…") { addAntennaChannels() })
+        root.addView(button("Remove the antenna channels that were added automatically") { removeAutoAdded() })
         onlyMine = CheckBox(this).apply {
             text = "Only suggest antenna channels that are in my Channels list"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
@@ -297,17 +298,53 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** Shows Schedules Direct's antenna channels with checkboxes; adds only the ones picked. */
     private fun addAntennaChannels() {
         save()
-        val lines = SchedulesDirect(prefs, filesDir).suggestedChannelLines(CommandParser.parseChannels(prefs.channelsText))
-        if (lines.isEmpty()) {
-            status.text = "Nothing to add. Connect to Schedules Direct first, or all your antenna channels are already in the list."
+        val sd = SchedulesDirect(prefs, filesDir)
+        val have = CommandParser.parseChannels(prefs.channelsText).map { it.number }.toSet()
+        val candidates = sd.allChannels().filter { it.number !in have && it.number !in prefs.hiddenSet }
+        if (candidates.isEmpty()) {
+            status.text = "Nothing to add. Connect to Schedules Direct first, or every antenna channel is already in your list."
             return
         }
-        val text = channels.text.toString().trimEnd() + "\n# Antenna channels from Schedules Direct (add names you'd say after the commas)\n" + lines.joinToString("\n") + "\n"
-        channels.setText(text)
+        val labels = candidates.map { c -> "${c.number}  " + sd.namesFor(c).distinctBy { it.lowercase() }.joinToString(", ") }.toTypedArray()
+        val picked = BooleanArray(candidates.size)
+        AlertDialog.Builder(this)
+            .setTitle("Tick the channels your TV gets")
+            .setMultiChoiceItems(labels, picked) { _, which, on -> picked[which] = on }
+            .setPositiveButton("Add these") { _, _ ->
+                val lines = candidates.filterIndexed { i, _ -> picked[i] }.map { c ->
+                    "${c.number} = " + sd.namesFor(c).filter { !it.endsWith(" Affiliate") }.distinctBy { it.lowercase() }.joinToString(", ")
+                }
+                if (lines.isNotEmpty()) {
+                    channels.setText(channels.text.toString().trimEnd() + "\n" + lines.joinToString("\n") + "\n")
+                    save()
+                }
+                status.text = "Added ${lines.size} channels. Add any names you'd say after the commas, like Cozi or ION."
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Removes lines that "Add my antenna channels" put in automatically, keeping ones the user typed or edited. */
+    private fun removeAutoAdded() {
         save()
-        status.text = "Added ${lines.size} antenna channels to the Channels list. You can add other names you might say after the commas."
+        val sd = SchedulesDirect(prefs, filesDir)
+        val byNumber = sd.allChannels().associateBy { it.number }
+        var removed = 0
+        val kept = channels.text.toString().lines().filter { line ->
+            if (line.trim().startsWith("# Antenna channels from Schedules Direct")) { removed++; return@filter false }
+            val ch = CommandParser.parseChannelLine(line) ?: return@filter true
+            val sdc = byNumber[ch.number] ?: return@filter true
+            val auto = sd.namesFor(sdc).map { it.lowercase() }.toSet()
+            val generated = ch.names.isNotEmpty() && ch.names.all { it.lowercase() in auto }
+            if (generated) removed++
+            !generated
+        }
+        channels.setText(kept.joinToString("\n"))
+        save()
+        status.text = "Removed $removed automatically added lines. Lines with names you typed yourself were kept. Tap \"Check my channel list\" to see what's left."
     }
 
     private fun checkListings() {

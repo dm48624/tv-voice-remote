@@ -267,6 +267,13 @@ class SchedulesDirect(private val prefs: Prefs, private val dir: File) {
         emptyList()
     }
 
+    /** Names Schedules Direct gives a channel (call letters, network, longer name). */
+    fun namesFor(c: ListedChannel): List<String> =
+        listOf(c.name, c.altName, c.affiliate, c.affiliate.removeSuffix(" Affiliate").trim()).filter { it.isNotBlank() }
+
+    fun allChannels(): List<ListedChannel> = channels(allowDownload = false)
+        .sortedWith(compareBy({ it.number.substringBefore('.').toIntOrNull() ?: 0 }, { it.number.substringAfter('.', "0").toIntOrNull() ?: 0 }))
+
     /** Channel-list lines ("9.1 = WWTV, CBS") for antenna channels the user's list doesn't have yet. */
     fun suggestedChannelLines(existing: List<Channel>): List<String> {
         val have = existing.map { it.number }.toSet() + prefs.hiddenSet
