@@ -192,6 +192,7 @@ class SettingsActivity : Activity() {
         sdZip = field(prefs.sdZip, "ZIP code", numeric = true); root.addView(sdZip)
         root.addView(button("Connect to Schedules Direct and download listings") { connectSd() })
         root.addView(button("Choose antenna channels to add to my Channels list…") { addAntennaChannels() })
+        root.addView(button("Fill in names for my channels") { fillInNames() })
         root.addView(button("Remove the antenna channels that were added automatically") { removeAutoAdded() })
         onlyMine = CheckBox(this).apply {
             text = "Only suggest antenna channels that are in my Channels list"
@@ -325,6 +326,34 @@ class SettingsActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** Adds Schedules Direct's names to channels already in the list ("9.3" -> "9.3 = WWTVDT3, MeTV"). */
+    private fun fillInNames() {
+        save()
+        val sd = SchedulesDirect(prefs, filesDir)
+        val byNumber = sd.allChannels().associateBy { it.number }
+        if (byNumber.isEmpty()) {
+            status.text = "Connect to Schedules Direct first, so I have the channel names."
+            return
+        }
+        var changed = 0
+        val out = channels.text.toString().lines().map { line ->
+            val ch = CommandParser.parseChannelLine(line) ?: return@map line
+            val sdc = byNumber[ch.number] ?: return@map line
+            val have = ch.names.map { it.lowercase() }.toSet()
+            val extra = sd.namesFor(sdc).filter { !it.endsWith(" Affiliate") }
+                .distinctBy { it.lowercase() }.filter { it.lowercase() !in have }
+            if (extra.isEmpty()) return@map line
+            changed++
+            // Keep any note after a # on the line.
+            val note = line.substringAfter('#', "").let { if (it.isNotEmpty()) "  #$it" else "" }
+            "${ch.number} = " + (ch.names + extra).joinToString(", ") + note
+        }
+        channels.setText(out.joinToString("\n"))
+        save()
+        status.text = if (changed == 0) "Your channels already have all the names Schedules Direct knows."
+        else "Added names to $changed of your channels. Your own names were kept, and they come first."
     }
 
     /** Removes lines that "Add my antenna channels" put in automatically, keeping ones the user typed or edited. */
