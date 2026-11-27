@@ -197,6 +197,14 @@ class Listings(private val dir: File, private val prefs: Prefs) {
         return starts.maxByOrNull { rank(it) }
     }
 
+    /** A channel whose name is exactly what was said, ignoring spaces and punctuation ("Laff More"). */
+    fun channelNamedExactly(target: String): ListedChannel? {
+        fun squash(x: String) = Text.normalize(x).replace(" ", "")
+        val t = squash(target)
+        if (t.length < 3) return null
+        return try { channels() } catch (e: TvException) { return null }.firstOrNull { squash(it.name) == t }
+    }
+
     fun nowOn(c: ListedChannel): Airing? {
         val nowSec = System.currentTimeMillis() / 1000
         return c.airings.firstOrNull { it.startSec <= nowSec && nowSec < it.endSec }

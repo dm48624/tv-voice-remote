@@ -65,6 +65,14 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         }
         is Command.PreviousChannel -> { ensureLiveTv(); tv.key("KEY_PRECH"); "Back to the last channel." }
         is Command.Tune -> {
+            c.partial?.let { said ->
+                listings.channelNamedExactly(said)?.let { exact ->
+                    if (exact.number != c.number) {
+                        tuneTo(exact.number)
+                        return "Going to ${spokenChannel(exact)}."
+                    }
+                }
+            }
             ensureLiveTv()
             typeChannel(c.number)
             "Going to " + (c.name ?: "channel ${c.number}") + "."

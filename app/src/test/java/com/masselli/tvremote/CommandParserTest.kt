@@ -28,6 +28,9 @@ class CommandParserTest {
         assertEquals(Command.Tune("5.4", "WNEMDT4"), q.parse("go to ION"))
         assertEquals(Command.Tune("1510", "TV Plus ION"), q.parse("go to TV Plus ION"))
         assertEquals(Command.Tune("1510", "TV Plus ION"), q.parse("put on Samsung ION"))
+        val l = CommandParser(CommandParser.parseChannels("9.4 = WWTVDT4, Laff"))
+        assertEquals(Command.Tune("9.4", "WWTVDT4"), l.parse("go to Laff"))
+        assertEquals(Command.Tune("9.4", "WWTVDT4", "laff more"), l.parse("go to Laff More"))
     }
 
     @Test fun forgivingChannelLines() {

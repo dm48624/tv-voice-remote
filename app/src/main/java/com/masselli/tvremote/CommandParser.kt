@@ -11,7 +11,7 @@ sealed class Command {
     object Mute : Command()
     data class ChannelStep(val up: Boolean) : Command()
     object PreviousChannel : Command()
-    data class Tune(val number: String, val name: String?) : Command()
+    data class Tune(val number: String, val name: String?, val partial: String? = null) : Command()
     /** "Put on X" where X isn't a channel: open a Roku app named X, or search for X. */
     data class Go(val target: String) : Command()
     data class Search(val query: String, val onRoku: Boolean = false) : Command()
@@ -205,7 +205,11 @@ class CommandParser(private val channels: List<Channel>) {
         val t = target.trim()
         if (t.matches(Regex("^(the )?(roku|roku stick|streaming|streaming stick|streaming apps|apps)$"))) return Command.SwitchInput(Source.ROKU)
         if (t.matches(Regex("^(the )?(antenna|live tv|regular tv|normal tv|over the air|local channels|tv|television|live television|cable)$"))) return Command.SwitchInput(Source.ANTENNA)
-        matchChannel(t)?.let { return Command.Tune(it.number, it.names.firstOrNull()) }
+        matchChannel(t)?.let {
+            // Remember what was said when the match was only partial ("Laff More" contains "Laff"),
+            // so a channel with exactly that name elsewhere can win.
+            return Command.Tune(it.number, it.names.firstOrNull(), if (matchesExactly(t)) null else t)
+        }
         val core = Text.core(t)
         if (core.matches(Regex("^\\d+(\\.\\d+)?$"))) {
             val known = channels.firstOrNull { it.number == core }
@@ -214,6 +218,12 @@ class CommandParser(private val channels: List<Channel>) {
             else Command.Tune(core, null)
         }
         return null
+    }
+
+    /** True if the target names a channel in the list exactly (not just containing a name). */
+    fun matchesExactly(target: String): Boolean {
+        val t = Text.core(Text.normalize(target))
+        return t.isNotEmpty() && channels.any { c -> c.names.any { Text.core(Text.normalize(it)) == t } }
     }
 
     fun matchChannel(target: String): Channel? {
