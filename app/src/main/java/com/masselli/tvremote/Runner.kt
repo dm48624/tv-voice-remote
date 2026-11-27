@@ -256,14 +256,15 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
     }
 
     private fun typeChannel(number: String) {
-        val keys = number.mapNotNull { ch ->
+        // Slow and steady: the TV sometimes drops a press that arrives too quickly,
+        // which turned 5.1 into 51 or left it stuck at "5-".
+        for (ch in number) {
             when {
-                ch.isDigit() -> "KEY_$ch"
-                ch == '.' -> "KEY_PLUS100" // the "-" sub-channel button
-                else -> null
+                ch.isDigit() -> { tv.key("KEY_$ch"); Thread.sleep(650) }
+                ch == '.' -> { tv.key("KEY_PLUS100"); Thread.sleep(900) } // the "-" sub-channel button
             }
         }
-        tv.keys(keys, 350)
+        Thread.sleep(300)
         tv.key("KEY_ENTER")
     }
 
@@ -271,7 +272,7 @@ class Runner(private val prefs: Prefs, filesDir: java.io.File) {
         if (force || prefs.mode != "tv") {
             tv.key("KEY_TV")
             prefs.mode = "tv"
-            Thread.sleep(1500)
+            Thread.sleep(2500)
         }
     }
 
