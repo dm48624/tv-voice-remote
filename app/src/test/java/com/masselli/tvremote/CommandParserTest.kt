@@ -23,6 +23,13 @@ class CommandParserTest {
         assertEquals("1001", channels[3].number)
     }
 
+    @Test fun exactNameWins() {
+        val q = CommandParser(CommandParser.parseChannels("5.4 = WNEMDT4, ION\n1510 = TV Plus ION, Samsung ION"))
+        assertEquals(Command.Tune("5.4", "WNEMDT4"), q.parse("go to ION"))
+        assertEquals(Command.Tune("1510", "TV Plus ION"), q.parse("go to TV Plus ION"))
+        assertEquals(Command.Tune("1510", "TV Plus ION"), q.parse("put on Samsung ION"))
+    }
+
     @Test fun forgivingChannelLines() {
         assertEquals(Channel("9.3", listOf("MeTV")), CommandParser.parseChannelLine("9.3 = MeTV"))
         assertEquals(Channel("9.3", listOf("MeTV")), CommandParser.parseChannelLine("9-3 MeTV"))

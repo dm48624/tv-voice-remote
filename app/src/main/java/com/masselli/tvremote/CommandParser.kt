@@ -219,12 +219,16 @@ class CommandParser(private val channels: List<Channel>) {
     fun matchChannel(target: String): Channel? {
         val t = Text.core(Text.normalize(target))
         if (t.isEmpty()) return null
+        // An exact name ("ION") beats a longer name that merely contains it ("TV Plus ION").
+        for (c in channels) for (n in c.names) {
+            if (Text.core(Text.normalize(n)) == t) return c
+        }
         var best: Channel? = null
         var bestLen = 0
         for (c in channels) for (n in c.names) {
             val a = Text.core(Text.normalize(n))
             if (a.isEmpty()) continue
-            val hit = t == a || " $t ".contains(" $a ") || (t.length >= 3 && " $a ".contains(" $t "))
+            val hit = " $t ".contains(" $a ") || (t.length >= 3 && " $a ".contains(" $t "))
             if (hit && a.length > bestLen) { best = c; bestLen = a.length }
         }
         return best
